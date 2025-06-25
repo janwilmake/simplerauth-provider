@@ -821,13 +821,13 @@ async function decrypt(encrypted: string, secret: string): Promise<string> {
   return decoder.decode(decrypted);
 }
 
-interface UserContext extends ExecutionContext {
+export interface UserContext extends ExecutionContext {
   /** Should contain authenticated X User */
-  user: XUser;
+  user: XUser | undefined;
   /** X Access token */
-  xAccessToken: string;
+  xAccessToken: string | undefined;
   /** Access token. Can be decrypted with client secret to retrieve X access token */
-  accessToken: string;
+  accessToken: string | undefined;
   registered: boolean;
 }
 
@@ -841,6 +841,8 @@ interface UserFetchHandler<TEnv = {}> {
 export function withSimplerAuth<TEnv = {}>(
   handler: UserFetchHandler<TEnv>,
   config?: {
+    /** If true, login will be forced and user will always be present */
+    isLoginRequired?: boolean;
     /** Defaults to "users.read tweet.read offline.access" meaning you get the user info and can read tweets */
     scope?: string;
     /** Defaults to 'Lax' meaning subdomains are also valid to use the cookies */
@@ -881,7 +883,7 @@ export function withSimplerAuth<TEnv = {}>(
       }
     }
 
-    if (!user) {
+    if (!user && config?.isLoginRequired) {
       const isBrowser = request.headers.get("accept")?.includes("text/html");
       const url = new URL(request.url);
       const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
