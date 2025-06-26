@@ -847,15 +847,15 @@ export interface UserContext<T = { [key: string]: any }>
   setMetadata: (metadata: T) => Promise<void>;
 }
 
-interface UserFetchHandler<TEnv = {}> {
-  (request: Request, env: Env & TEnv, ctx: UserContext):
+interface UserFetchHandler<TEnv = {}, TMetadata = { [key: string]: any }> {
+  (request: Request, env: Env & TEnv, ctx: UserContext<TMetadata>):
     | Response
     | Promise<Response>;
 }
 
 /** Easiest way to add oauth with required login! */
-export function withSimplerAuth<TEnv = {}>(
-  handler: UserFetchHandler<TEnv>,
+export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
+  handler: UserFetchHandler<TEnv, TMetadata>,
   config?: {
     /** If true, login will be forced and user will always be present */
     isLoginRequired?: boolean;
@@ -926,7 +926,7 @@ export function withSimplerAuth<TEnv = {}>(
     }
 
     // Create enhanced context with user and registered status
-    const enhancedCtx: UserContext = {
+    const enhancedCtx: UserContext<TMetadata> = {
       passThroughOnException: () => ctx.passThroughOnException(),
       props: ctx.props,
       waitUntil: (promise: Promise<any>) => ctx.waitUntil(promise),
@@ -935,7 +935,7 @@ export function withSimplerAuth<TEnv = {}>(
       xAccessToken,
       accessToken,
       setMetadata: userDO.setMetadata,
-      getMetadata: userDO.getMetadata,
+      getMetadata: () => userDO.getMetadata() as Promise<TMetadata>,
     };
 
     // Call the user's fetch handler
