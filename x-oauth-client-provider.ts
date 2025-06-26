@@ -843,8 +843,8 @@ export interface UserContext<T = { [key: string]: any }>
   /** Access token. Can be decrypted with client secret to retrieve X access token */
   accessToken: string | undefined;
   registered: boolean;
-  getMetadata: () => Promise<T>;
-  setMetadata: (metadata: T) => Promise<void>;
+  getMetadata?: () => Promise<T>;
+  setMetadata?: (metadata: T) => Promise<void>;
 }
 
 interface UserFetchHandler<TEnv = {}, TMetadata = { [key: string]: any }> {
@@ -934,8 +934,10 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
       registered,
       xAccessToken,
       accessToken,
-      setMetadata: userDO.setMetadata,
-      getMetadata: () => userDO.getMetadata() as Promise<TMetadata>,
+      setMetadata: userDO ? userDO.setMetadata : undefined,
+      getMetadata: userDO
+        ? () => userDO.getMetadata() as Promise<TMetadata>
+        : undefined,
     };
 
     // Call the user's fetch handler
