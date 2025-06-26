@@ -94,6 +94,18 @@ export class CodeDO extends DurableObject {
       accessToken,
     };
   }
+
+  async setMetadata<T>(metadata: T) {
+    await this.storage.put("metadata", metadata);
+  }
+
+  async getMetadata<T>(): Promise<T | null> {
+    const metadata = await this.storage.get<T>("metadata");
+    if (!metadata) {
+      return null;
+    }
+    return metadata;
+  }
 }
 
 /**
@@ -600,6 +612,7 @@ async function handleCallback(
   // Store user data in Durable Object with "user:" prefix
   const userDOId = env.CODES.idFromName(`user:${encryptedAccessToken}`);
   const userDO = env.CODES.get(userDOId);
+
   await userDO.setUser(user, tokenData.access_token, encryptedAccessToken);
 
   // Check if this was part of an OAuth provider flow
@@ -629,7 +642,7 @@ async function handleCallback(
       );
       headers.append(
         "Set-Cookie",
-        `access_token=${encryptedAccessToken}; HttpOnly; Secure; SameSite=${sameSite}; Path=/`,
+        `access_token=${encryptedAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`,
       );
 
       return new Response(response.body, { status: response.status, headers });
@@ -821,7 +834,8 @@ async function decrypt(encrypted: string, secret: string): Promise<string> {
   return decoder.decode(decrypted);
 }
 
-export interface UserContext extends ExecutionContext {
+export interface UserContext<T = { [key: string]: any }>
+  extends ExecutionContext {
   /** Should contain authenticated X User */
   user: XUser | undefined;
   /** X Access token */
@@ -829,6 +843,8 @@ export interface UserContext extends ExecutionContext {
   /** Access token. Can be decrypted with client secret to retrieve X access token */
   accessToken: string | undefined;
   registered: boolean;
+  getMetadata: () => Promise<T>;
+  setMetadata: (metadata: T) => Promise<void>;
 }
 
 interface UserFetchHandler<TEnv = {}> {
@@ -862,6 +878,8 @@ export function withSimplerAuth<TEnv = {}>(
     }
 
     // Get user from access token
+    let userDO: DurableObjectStub<CodeDO>;
+
     let user: XUser | undefined = undefined;
     let registered = false;
     let xAccessToken: string | undefined = undefined;
@@ -870,7 +888,7 @@ export function withSimplerAuth<TEnv = {}>(
       try {
         // Get user data from Durable Object
         const userDOId = env.CODES.idFromName(`user:${accessToken}`);
-        const userDO = env.CODES.get(userDOId);
+        userDO = env.CODES.get(userDOId);
         const userData = await userDO.getUser();
 
         if (userData) {
@@ -916,6 +934,8 @@ export function withSimplerAuth<TEnv = {}>(
       registered,
       xAccessToken,
       accessToken,
+      setMetadata: userDO.setMetadata,
+      getMetadata: userDO.getMetadata,
     };
 
     // Call the user's fetch handler
