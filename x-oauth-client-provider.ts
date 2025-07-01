@@ -659,7 +659,7 @@ async function handleCallback(
   );
   headers.append(
     "Set-Cookie",
-    `access_token=${encryptedAccessToken}; HttpOnly; Secure; SameSite=${sameSite}; Path=/`,
+    `access_token=${encryptedAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`,
   );
 
   return new Response(null, { status: 302, headers });

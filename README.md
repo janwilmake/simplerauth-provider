@@ -1,6 +1,6 @@
 # X OAuth Provider
 
-[![janwilmake/x-oauth-client-provider context](https://badge.forgithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md)](https://uithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md) [![](https://b.lmpify.com)](https://lmpify.com?q=https://uithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md)
+[![janwilmake/x-oauth-client-provider context](https://badge.forgithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md)](https://uithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md) [![](https://b.lmpify.com)](https://letmeprompt.com?q=https://uithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md)
 
 This X OAuth client-provider uses the client's domain name as the client_id and automatically derives the `redirect_uri` from it (e.g., `https://example.com/callback`), eliminating the need for client registration while maintaining security through domain validation.
 
@@ -22,11 +22,7 @@ npm i simplerauth-x-provider
 ### Direct flow
 
 ```typescript
-import {
-  handleOAuth,
-  getAccessToken,
-  CodeDO,
-} from "simplerauth-x-provider";
+import { handleOAuth, getAccessToken, CodeDO } from "simplerauth-x-provider";
 export { CodeDO };
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -60,7 +56,9 @@ export default {
       `<html><body>
         <h1>X OAuth Demo</h1>
         <p>Welcome, ${ctx.user.name || ctx.user.username}!</p>
-        <img src="${ctx.user.profile_image_url}" alt="Avatar" width="50" height="50">
+        <img src="${
+          ctx.user.profile_image_url
+        }" alt="Avatar" width="50" height="50">
         <p>Username: @${ctx.user.username}</p>
         <a href="/logout">Logout</a><br>
         <a href="/provider">Try provider flow example</a>
