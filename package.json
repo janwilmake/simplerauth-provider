@@ -1,6 +1,6 @@
 {
-  "name": "simplerauth-x-provider",
-  "version": "0.0.8",
+  "name": "x-oauth-client-provider",
+  "version": "0.0.10",
   "files": [
     "x-oauth-client-provider.ts"
   ],

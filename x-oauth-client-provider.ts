@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 export interface Env {
   X_CLIENT_ID: string;
   X_CLIENT_SECRET: string;
-  CODES: DurableObjectNamespace<CodeDO>;
+  UserDO: DurableObjectNamespace<UserDO>;
 }
 
 interface OAuthState {
@@ -21,7 +21,7 @@ export interface XUser {
   [key: string]: any;
 }
 
-export class CodeDO extends DurableObject {
+export class UserDO extends DurableObject {
   private storage: DurableObjectStorage;
 
   constructor(state: DurableObjectState, env: Env) {
@@ -88,11 +88,7 @@ export class CodeDO extends DurableObject {
       return null;
     }
 
-    return {
-      user,
-      xAccessToken,
-      accessToken,
-    };
+    return { user, xAccessToken, accessToken };
   }
 
   async setMetadata<T>(metadata: T) {
@@ -110,7 +106,7 @@ export class CodeDO extends DurableObject {
 
 /**
  * Handle OAuth requests including MCP-required metadata endpoints.
- * Handles /authorize, /token, /callback, /logout, and metadata endpoints.
+ * Handles /authorize, /token, /callback, /logout, /me, and metadata endpoints.
  */
 export async function handleOAuth(
   request: Request,
@@ -121,22 +117,20 @@ export async function handleOAuth(
   const url = new URL(request.url);
   const path = url.pathname;
 
-  if (!env.X_CLIENT_ID || !env.X_CLIENT_SECRET || !env.CODES) {
+  if (!env.X_CLIENT_ID || !env.X_CLIENT_SECRET || !env.UserDO) {
     return new Response(
       `Environment misconfigured. Ensure to have X_CLIENT_ID or X_CLIENT_SECRET secrets set, as well as the Durable Object, with:
 
 [[durable_objects.bindings]]
-name = "CODES"
-class_name = "CodeDO"
+name = "UserDO"
+class_name = "UserDO"
 
 [[migrations]]
-new_sqlite_classes = ["CodeDO"]
+new_sqlite_classes = ["UserDO"]
 tag = "v1"
 
       `,
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 
@@ -162,6 +156,10 @@ tag = "v1"
     return handleCallback(request, env, sameSite);
   }
 
+  if (path === "/me") {
+    return handleMe(request, env);
+  }
+
   if (path === "/logout") {
     const url = new URL(request.url);
     const redirectTo = url.searchParams.get("redirect_to") || "/";
@@ -175,6 +173,97 @@ tag = "v1"
   }
 
   return null; // Not an OAuth route, let other handlers take over
+}
+
+// Handle /me endpoint to return current user information
+async function handleMe(request: Request, env: Env): Promise<Response> {
+  // Handle preflight OPTIONS request
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }
+
+  if (request.method !== "GET") {
+    return new Response(JSON.stringify({ error: "method_not_allowed" }), {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+  };
+
+  // Get access token from request
+  const accessToken = getAccessToken(request);
+  if (!accessToken) {
+    return new Response(
+      JSON.stringify({
+        error: "unauthorized",
+        error_description: "Access token required",
+      }),
+      {
+        status: 401,
+        headers: {
+          ...headers,
+          "WWW-Authenticate": 'Bearer realm="main"',
+        },
+      },
+    );
+  }
+
+  try {
+    // Get user data from Durable Object
+    const userDOId = env.UserDO.idFromName(`user:${accessToken}`);
+    const userDO = env.UserDO.get(userDOId);
+    const userData = await userDO.getUser();
+
+    if (!userData) {
+      return new Response(
+        JSON.stringify({
+          error: "invalid_token",
+          error_description: "Token not found or expired",
+        }),
+        {
+          status: 401,
+          headers: {
+            ...headers,
+            "WWW-Authenticate": 'Bearer realm="main", error="invalid_token"',
+          },
+        },
+      );
+    }
+
+    // Return user information
+    return new Response(
+      JSON.stringify({
+        data: userData.user,
+      }),
+      { headers },
+    );
+  } catch (error) {
+    console.error("Error retrieving user data:", error);
+    return new Response(
+      JSON.stringify({
+        error: "server_error",
+        error_description: "Internal server error",
+      }),
+      {
+        status: 500,
+        headers,
+      },
+    );
+  }
 }
 
 // MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)
@@ -395,8 +484,8 @@ async function createAuthCodeAndRedirect(
   const xAccessToken = await decrypt(encryptedAccessToken, env.X_CLIENT_SECRET);
 
   // Create Durable Object for this auth code with "code:" prefix
-  const id = env.CODES.idFromName(`code:${authCode}`);
-  const authCodeDO = env.CODES.get(id);
+  const id = env.UserDO.idFromName(`code:${authCode}`);
+  const authCodeDO = env.UserDO.get(id);
 
   await authCodeDO.setAuthData(
     xAccessToken,
@@ -483,8 +572,8 @@ async function handleToken(
   }
 
   // Get auth code data from Durable Object with "code:" prefix
-  const id = env.CODES.idFromName(`code:${code.toString()}`);
-  const authCodeDO = env.CODES.get(id);
+  const id = env.UserDO.idFromName(`code:${code.toString()}`);
+  const authCodeDO = env.UserDO.get(id);
   const authData = await authCodeDO.getAuthData();
 
   if (!authData) {
@@ -610,8 +699,8 @@ async function handleCallback(
   );
 
   // Store user data in Durable Object with "user:" prefix
-  const userDOId = env.CODES.idFromName(`user:${encryptedAccessToken}`);
-  const userDO = env.CODES.get(userDOId);
+  const userDOId = env.UserDO.idFromName(`user:${encryptedAccessToken}`);
+  const userDO = env.UserDO.get(userDOId);
 
   await userDO.setUser(user, tokenData.access_token, encryptedAccessToken);
 
@@ -878,7 +967,7 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     }
 
     // Get user from access token
-    let userDO: DurableObjectStub<CodeDO>;
+    let userDO: DurableObjectStub<UserDO>;
 
     let user: XUser | undefined = undefined;
     let registered = false;
@@ -887,8 +976,8 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     if (accessToken) {
       try {
         // Get user data from Durable Object
-        const userDOId = env.CODES.idFromName(`user:${accessToken}`);
-        userDO = env.CODES.get(userDOId);
+        const userDOId = env.UserDO.idFromName(`user:${accessToken}`);
+        userDO = env.UserDO.get(userDOId);
         const userData = await userDO.getUser();
 
         if (userData) {

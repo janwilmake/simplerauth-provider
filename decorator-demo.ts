@@ -2,6 +2,12 @@ import { CodeDO, withSimplerAuth } from "./x-oauth-client-provider";
 export { CodeDO };
 export default {
   fetch: withSimplerAuth(async (request, env, ctx) => {
+    if (!ctx.user) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/authorize?redirect_to=/" },
+      });
+    }
     return new Response(
       `<html><body>
         <h1>X OAuth Demo</h1>
@@ -16,5 +22,5 @@ export default {
       </body></html>`,
       { headers: { "Content-Type": "text/html;charset=utf8" } },
     );
-  }),
+  }, {}),
 };
