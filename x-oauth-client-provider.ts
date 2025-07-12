@@ -661,9 +661,12 @@ async function handleCallback(
   });
 
   if (!tokenResponse.ok) {
-    return new Response(`X API responded with ${tokenResponse.status}`, {
-      status: 400,
-    });
+    return new Response(
+      `X API responded with ${
+        tokenResponse.status
+      } - ${await tokenResponse.text()}`,
+      { status: 400 },
+    );
   }
 
   const tokenData = (await tokenResponse.json()) as any;
