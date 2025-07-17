@@ -1,0 +1,1 @@
+Very readable, minimal, MCP compatible oauth-provider that implements 'domain-as-client-id' and dynamic client registration. The same pattern can be used for any downstream oauth provider, but in this case it uses X.
