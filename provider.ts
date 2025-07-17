@@ -4,7 +4,7 @@ type Env = {
   CLIENT_SECRET: string;
 };
 
-const oauthEndpoints = [
+export const oauthEndpoints = [
   "/.well-known/oauth-authorization-server",
   "/.well-known/oauth-protected-resource",
   "/register",
@@ -12,17 +12,6 @@ const oauthEndpoints = [
   "/callback",
   "/token",
 ];
-export default {
-  fetch: (request: Request, env: Env, ctx: ExecutionContext) => {
-    const url = new URL(request.url);
-    if (oauthEndpoints.includes(url.pathname)) {
-      return env.AuthProvider.get(
-        env.AuthProvider.idFromName("oauth-central")
-      ).fetch(request);
-    }
-    return new Response("Not found", { status: 404 });
-  },
-};
 
 export class AuthProvider {
   sql: SqlStorage;
@@ -43,7 +32,6 @@ export class AuthProvider {
         name TEXT NOT NULL,
         profile_image_url TEXT,
         verified BOOLEAN DEFAULT FALSE,
-        balance REAL DEFAULT 0.0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -400,7 +388,7 @@ export class AuthProvider {
         return new Response("Failed to get user info", { status: 400 });
       }
 
-      const userData = await userResponse.json();
+      const userData: any = await userResponse.json();
       const xUser = userData.data;
       xUser.profile_image_url = xUser.profile_image_url?.replace(
         "_normal",
@@ -497,14 +485,13 @@ export class AuthProvider {
   async createOrUpdateUser(xUser) {
     this.sql.exec(
       `INSERT OR REPLACE INTO users 
-       (x_user_id, username, name, profile_image_url, verified, balance, updated_at)
-       VALUES (?, ?, ?, ?, ?, COALESCE((SELECT balance FROM users WHERE x_user_id = ?), 0.0), CURRENT_TIMESTAMP)`,
+       (x_user_id, username, name, profile_image_url, verified, updated_at)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
       xUser.id,
       xUser.username,
       xUser.name,
       xUser.profile_image_url,
-      xUser.verified,
-      xUser.id
+      xUser.verified
     );
   }
 
