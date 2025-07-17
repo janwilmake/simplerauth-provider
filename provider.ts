@@ -4,11 +4,6 @@ type Env = {
   CLIENT_SECRET: string;
 };
 
-const oauthProvider = (request: Request, env: Env) =>
-  env.AuthProvider.get(env.AuthProvider.idFromName("oauth-central")).fetch(
-    request
-  );
-
 const oauthEndpoints = [
   "/.well-known/oauth-authorization-server",
   "/.well-known/oauth-protected-resource",
@@ -21,9 +16,11 @@ export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => {
     const url = new URL(request.url);
     if (oauthEndpoints.includes(url.pathname)) {
-      return oauthProvider(request, env);
+      return env.AuthProvider.get(
+        env.AuthProvider.idFromName("oauth-central")
+      ).fetch(request);
     }
-    return new Response("Hello, World!");
+    return new Response("Not found", { status: 404 });
   },
 };
 
