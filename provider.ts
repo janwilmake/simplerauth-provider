@@ -1,11 +1,13 @@
 type Env = {
-  CENTRAL_DB: DurableObjectNamespace;
+  AuthProvider: DurableObjectNamespace;
   CLIENT_ID: string;
   CLIENT_SECRET: string;
 };
 
 const oauthProvider = (request: Request, env: Env) =>
-  env.CENTRAL_DB.get(env.CENTRAL_DB.idFromName("oauth-central")).fetch(request);
+  env.AuthProvider.get(env.AuthProvider.idFromName("oauth-central")).fetch(
+    request
+  );
 
 const oauthEndpoints = [
   "/.well-known/oauth-authorization-server",
@@ -82,7 +84,10 @@ export class AuthProvider {
     const path = url.pathname;
 
     if (!this.env.CLIENT_ID || !this.env.CLIENT_SECRET) {
-      return new Response("Environment misconfigured", { status: 500 });
+      return new Response(
+        "Environment misconfigured, please add CLIENT_ID and CLIENT_SECRET",
+        { status: 500 }
+      );
     }
 
     // CORS preflight

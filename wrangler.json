@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "simplerauth-provider",
+  "main": "provider.ts",
+  "compatibility_date": "2025-07-05",
+  "dev": { "port": 3000 },
+  "durable_objects": {
+    "bindings": [{ "name": "AuthProvider", "class_name": "AuthProvider" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AuthProvider"] }]
+}
