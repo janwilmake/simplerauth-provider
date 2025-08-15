@@ -10,12 +10,19 @@ This X OAuth client-provider uses the client's domain name as the client_id and 
 - No client registration required - use any domain as client_id
 - [MCP compatible Authorization](https://modelcontextprotocol.io/specification/draft/basic/authorization) including dynamic client registraiton fully supported
 - Uses [DORM](https://github.com/janwilmake/dorm) to expose admin panel with all users in aggregate (readonly) without compromising on performance (each user gets their own DO as source of truth)
+- Users that are already logged in won't be redirected to X Again, even from other clients.
 
 **3 ways to use it**
 
 1. **Internal** - Use directly in your cloudflare worker
 2. **Central** - Host as a separate worker and use as a central "OAuth Hub" for all your x-oauthed apps
 3. **Hosted** - Use directly from https://login.wilmake.com
+
+## Setup: Hosted
+
+TODO:
+
+- Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
 
 ## Setup: Internal and Central
 

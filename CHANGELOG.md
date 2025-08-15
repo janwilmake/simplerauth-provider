@@ -14,4 +14,4 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 
 - ✅ Turn users into a table
 - Add multistub and queryable-object and enable admin login
-- change in markdownfeed
+- Change to use this provider in markdownfeed and universal-oauth-provider
