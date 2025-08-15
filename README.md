@@ -8,7 +8,7 @@ This X OAuth client-provider uses the client's domain name as the client_id and 
 
 - 🚀 No client registration required - use any domain as client_id
 - 🔒 Secure domain validation and HTTPS enforcement
-- 🎯 MCP (Model Context Protocol) compliant OAuth 2.0 implementation
+- 🎯 MCP (Model Context Protocol) compliant OAuth 2.0 implementation, including dynamic client registration
 - ⚡ Built for Cloudflare Workers with Durable Objects
 - 🌐 Standard OAuth 2.0 flow compatible with existing libraries
 
@@ -59,10 +59,10 @@ export default {
         <p>Verified: ${ctx.user.verified ? "✓" : "✗"}</p>
         <a href="/logout">Logout</a>
       </body></html>`,
-        { headers: { "Content-Type": "text/html;charset=utf8" } },
+        { headers: { "Content-Type": "text/html;charset=utf8" } }
       );
     },
-    { isLoginRequired: true },
+    { isLoginRequired: true }
   ),
 };
 ```
@@ -84,7 +84,7 @@ export default {
     if (!accessToken) {
       // Redirect to login
       return Response.redirect(
-        "/authorize?redirect_to=" + encodeURIComponent(request.url),
+        "/authorize?redirect_to=" + encodeURIComponent(request.url)
       );
     }
 
@@ -142,7 +142,7 @@ async function handleHome(request: Request): Promise<Response> {
         <a href="/logout">Logout</a>
       </body></html>
     `,
-      { headers: { "Content-Type": "text/html" } },
+      { headers: { "Content-Type": "text/html" } }
     );
   }
 
@@ -154,7 +154,7 @@ async function handleHome(request: Request): Promise<Response> {
       <a href="/login">Login with X</a>
     </body></html>
   `,
-    { headers: { "Content-Type": "text/html" } },
+    { headers: { "Content-Type": "text/html" } }
   );
 }
 
@@ -307,7 +307,7 @@ async function handleProfile(request: Request, env: Env): Promise<Response> {
     `,
       {
         headers: { "Content-Type": "text/html" },
-      },
+      }
     );
   } catch (error) {
     return new Response(`Error fetching user data: ${error}`, { status: 500 });

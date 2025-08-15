@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 /// <reference lib="esnext" />
 import { DurableObject } from "cloudflare:workers";
-
+import { getMultiStub } from "multistub";
 export interface Env {
   X_CLIENT_ID: string;
   X_CLIENT_SECRET: string;
@@ -25,18 +25,39 @@ export interface XUser {
 
 export class UserDO extends DurableObject {
   private storage: DurableObjectStorage;
+  private sql: SqlStorage;
 
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
     this.storage = state.storage;
+    this.sql = state.storage.sql;
+
+    // Initialize users table
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        username TEXT NOT NULL,
+        profile_image_url TEXT,
+        verified BOOLEAN DEFAULT FALSE,
+        x_access_token TEXT NOT NULL,
+        access_token TEXT NOT NULL,
+        created_at INTEGER DEFAULT (unixepoch()),
+        updated_at INTEGER DEFAULT (unixepoch()),
+        additional_data TEXT DEFAULT '{}'
+      )
+    `);
+
     // Set alarm for 10 minutes from now
     this.storage.setAlarm(Date.now() + 10 * 60 * 1000);
   }
 
   async alarm() {
     // Only self-delete if this is not a user storage (auth codes expire, users don't)
-    const user = await this.storage.get("user");
-    if (!user) {
+    const hasUser = this.sql
+      .exec(`SELECT COUNT(*) as count FROM users`)
+      .toArray()[0];
+    if (!hasUser || hasUser.count === 0) {
       await this.storage.deleteAll();
     }
   }
@@ -48,6 +69,7 @@ export class UserDO extends DurableObject {
     redirectUri: string,
     resource?: string
   ) {
+    // Keep auth data storage unchanged (using KV storage)
     await this.storage.put("data", {
       x_access_token: xAccessToken,
       access_token: encryptedAccessToken,
@@ -58,6 +80,7 @@ export class UserDO extends DurableObject {
   }
 
   async getAuthData() {
+    // Keep auth data storage unchanged (using KV storage)
     return this.storage.get<{
       x_access_token: string;
       access_token: string;
@@ -72,32 +95,75 @@ export class UserDO extends DurableObject {
     xAccessToken: string,
     encryptedAccessToken: string
   ) {
-    await this.storage.put("user", user);
-    await this.storage.put("x_access_token", xAccessToken);
-    await this.storage.put("access_token", encryptedAccessToken);
+    const now = Math.floor(Date.now() / 1000);
+
+    // Extract standard fields
+    const {
+      id,
+      name,
+      username,
+      profile_image_url,
+      verified,
+      ...additionalData
+    } = user;
+
+    // Store user in SQLite
+    this.sql.exec(
+      `INSERT OR REPLACE INTO users 
+       (user_id, name, username, profile_image_url, verified, x_access_token, access_token, updated_at, additional_data)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
+      name,
+      username,
+      profile_image_url || null,
+      verified || false,
+      xAccessToken,
+      encryptedAccessToken,
+      now,
+      JSON.stringify(additionalData)
+    );
   }
 
   async getUser(): Promise<{
     user: XUser;
     xAccessToken: string;
     accessToken: string;
-  }> {
-    const user = await this.storage.get<XUser>("user");
-    const xAccessToken = await this.storage.get<string>("x_access_token");
-    const accessToken = await this.storage.get<string>("access_token");
+  } | null> {
+    const result = this.sql.exec(`SELECT * FROM users LIMIT 1`).toArray()[0];
 
-    if (!user || !xAccessToken || !accessToken) {
+    if (!result) {
       return null;
     }
 
-    return { user, xAccessToken, accessToken };
+    // Reconstruct user object
+    const additionalData = JSON.parse(
+      (result.additional_data as string) || "{}"
+    );
+    const user: XUser = {
+      id: result.user_id as string,
+      name: result.name as string,
+      username: result.username as string,
+      ...(result.profile_image_url && {
+        profile_image_url: result.profile_image_url as string,
+      }),
+      ...(result.verified && { verified: result.verified as boolean }),
+      ...additionalData,
+    };
+
+    return {
+      user,
+      xAccessToken: result.x_access_token as string,
+      accessToken: result.access_token as string,
+    };
   }
 
   async setMetadata<T>(metadata: T) {
+    // Keep metadata storage unchanged (using KV storage)
     await this.storage.put("metadata", metadata);
   }
 
   async getMetadata<T>(): Promise<T | null> {
+    // Keep metadata storage unchanged (using KV storage)
     const metadata = await this.storage.get<T>("metadata");
     if (!metadata) {
       return null;
@@ -113,6 +179,7 @@ export class UserDO extends DurableObject {
 export async function handleOAuth(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   scope = "users.read tweet.read offline.access",
   sameSite: "Strict" | "Lax" = "Lax"
 ): Promise<Response | null> {
@@ -277,11 +344,11 @@ tag = "v1"
   }
 
   if (path === "/callback") {
-    return handleCallback(request, env, sameSite);
+    return handleCallback(request, env, ctx, sameSite);
   }
 
   if (path === "/me") {
-    return handleMe(request, env);
+    return handleMe(request, env, ctx);
   }
 
   if (path === "/logout") {
@@ -300,7 +367,11 @@ tag = "v1"
 }
 
 // Handle /me endpoint to return current user information
-async function handleMe(request: Request, env: Env): Promise<Response> {
+async function handleMe(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -348,8 +419,13 @@ async function handleMe(request: Request, env: Env): Promise<Response> {
 
   try {
     // Get user data from Durable Object
-    const userDOId = env.UserDO.idFromName(`user:${accessToken}`);
-    const userDO = env.UserDO.get(userDOId);
+
+    const userDO = getMultiStub(
+      env.UserDO,
+      [{ name: `user:${accessToken}` }, { name: "aggregate" }],
+      ctx
+    );
+
     const userData = await userDO.getUser();
 
     if (!userData) {
@@ -688,6 +764,7 @@ async function handleToken(
 async function handleCallback(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   sameSite: string
 ): Promise<Response> {
   const url = new URL(request.url);
@@ -773,10 +850,11 @@ async function handleCallback(
     env.X_CLIENT_SECRET
   );
 
-  // Store user data in Durable Object with "user:" prefix
-  const userDOId = env.UserDO.idFromName(`user:${encryptedAccessToken}`);
-  const userDO = env.UserDO.get(userDOId);
-
+  const userDO = getMultiStub(
+    env.UserDO,
+    [{ name: `user:${encryptedAccessToken}` }, { name: "aggregate" }],
+    ctx
+  );
   await userDO.setUser(user, tokenData.access_token, encryptedAccessToken);
 
   // Check if this was part of an OAuth provider flow
@@ -1036,7 +1114,7 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     env: TEnv & Env,
     ctx: ExecutionContext
   ): Promise<Response> => {
-    const oauth = await handleOAuth(request, env, scope, sameSite);
+    const oauth = await handleOAuth(request, env, ctx, scope, sameSite);
     if (oauth) {
       return oauth;
     }
@@ -1051,8 +1129,11 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     if (accessToken) {
       try {
         // Get user data from Durable Object
-        const userDOId = env.UserDO.idFromName(`user:${accessToken}`);
-        userDO = env.UserDO.get(userDOId);
+        userDO = getMultiStub(
+          env.UserDO,
+          [{ name: `user:${accessToken}` }, { name: "aggregate" }],
+          ctx
+        );
         const userData = await userDO.getUser();
 
         if (userData) {

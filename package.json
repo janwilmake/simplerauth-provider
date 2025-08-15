@@ -1,11 +1,14 @@
 {
   "name": "x-oauth-client-provider",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "files": [
     "x-oauth-client-provider.ts"
   ],
   "main": "x-oauth-client-provider.ts",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250813.0"
+  },
+  "dependencies": {
+    "multistub": "^0.0.8"
   }
 }

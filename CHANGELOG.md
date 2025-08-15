@@ -1,4 +1,4 @@
-# 2025-01-27
+# 2025-06-27
 
 Initial implementation based on GitHub OAuth client-provider pattern.
 
@@ -9,3 +9,9 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 - ✅ MCP-compliant OAuth 2.0 server metadata endpoints
 - ✅ Encrypted access token storage using Durable Objects
 - ✅ Support for both direct login and OAuth provider flows
+
+# 2025-08-15
+
+- ✅ Turn users into a table
+- Add multistub and queryable-object and enable admin login
+- change in markdownfeed

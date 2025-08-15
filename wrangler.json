@@ -1,4 +1,6 @@
 {
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+
   "name": "x-oauth-client-provider-test",
   "compatibility_date": "2025-01-27",
   "routes": [
@@ -21,8 +23,12 @@
   },
   "migrations": [
     {
-      "new_sqlite_classes": ["UserDO"],
+      "new_sqlite_classes": ["CodeDO"],
       "tag": "v1"
+    },
+    {
+      "tag": "v2",
+      "renamed_classes": [{ "from": "CodeDO", "to": "UserDO" }]
     }
   ]
 }
