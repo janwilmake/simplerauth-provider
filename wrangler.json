@@ -7,6 +7,10 @@
     {
       "custom_domain": true,
       "pattern": "x-provider.simplerauth.com"
+    },
+    {
+      "custom_domain": true,
+      "pattern": "login.wilmake.com"
     }
   ],
   "main": "decorator-demo.ts",
