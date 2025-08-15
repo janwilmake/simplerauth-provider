@@ -2,10 +2,17 @@
 /// <reference lib="esnext" />
 import { DurableObject } from "cloudflare:workers";
 import { getMultiStub } from "multistub";
+import {
+  Queryable,
+  QueryableHandler,
+  QueryableObject,
+  studioMiddleware,
+} from "queryable-object";
 export interface Env {
   X_CLIENT_ID: string;
   X_CLIENT_SECRET: string;
-  UserDO: DurableObjectNamespace<UserDO>;
+  ADMIN_X_USERNAME: string;
+  UserDO: DurableObjectNamespace<UserDO & QueryableHandler>;
 }
 
 interface OAuthState {
@@ -23,9 +30,10 @@ export interface XUser {
   [key: string]: any;
 }
 
+@Queryable()
 export class UserDO extends DurableObject {
   private storage: DurableObjectStorage;
-  private sql: SqlStorage;
+  public sql: SqlStorage;
 
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
@@ -186,9 +194,14 @@ export async function handleOAuth(
   const url = new URL(request.url);
   const path = url.pathname;
 
-  if (!env.X_CLIENT_ID || !env.X_CLIENT_SECRET || !env.UserDO) {
+  if (
+    !env.X_CLIENT_ID ||
+    !env.X_CLIENT_SECRET ||
+    !env.ADMIN_X_USERNAME ||
+    !env.UserDO
+  ) {
     return new Response(
-      `Environment misconfigured. Ensure to have X_CLIENT_ID or X_CLIENT_SECRET secrets set, as well as the Durable Object, with:
+      `Environment misconfigured. Ensure to have X_CLIENT_ID, X_CLIENT_SECRET, and ADMIN_X_USERNAME secrets set, as well as the Durable Object, with:
 
 [[durable_objects.bindings]]
 name = "UserDO"
@@ -201,6 +214,35 @@ tag = "v1"
       `,
       { status: 500 }
     );
+  }
+
+  if (path === "/admin") {
+    const accessToken = getAccessToken(request);
+    if (!accessToken) {
+      return new Response(
+        JSON.stringify({
+          error: "unauthorized",
+          error_description: "Access token required",
+        }),
+        {
+          status: 401,
+          headers: { "WWW-Authenticate": 'Bearer realm="main"' },
+        }
+      );
+    }
+    const userDO = getMultiStub(
+      env.UserDO,
+      [{ name: `user:${accessToken}` }, { name: "aggregate" }],
+      ctx
+    );
+    const userData = await userDO.getUser();
+    if (userData?.user.username !== env.ADMIN_X_USERNAME) {
+      return new Response("Only admin can view DB");
+    }
+    const stub = getMultiStub(env.UserDO, [{ name: `aggregate` }], ctx);
+    return studioMiddleware(request, stub.raw, {
+      dangerouslyDisableAuth: true,
+    });
   }
 
   // MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)

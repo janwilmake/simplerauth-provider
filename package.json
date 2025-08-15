@@ -9,6 +9,7 @@
     "@cloudflare/workers-types": "^4.20250813.0"
   },
   "dependencies": {
-    "multistub": "^0.0.8"
+    "multistub": "^0.0.8",
+    "queryable-object": "^0.0.8"
   }
 }
