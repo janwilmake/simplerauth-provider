@@ -1,5 +1,5 @@
-import { CodeDO, withSimplerAuth } from "./x-oauth-client-provider";
-export { CodeDO };
+import { UserDO, withSimplerAuth } from "./x-oauth-client-provider";
+export { UserDO };
 export default {
   fetch: withSimplerAuth(async (request, env, ctx) => {
     if (!ctx.user) {
@@ -20,7 +20,7 @@ export default {
         <a href="/logout">Logout</a><br>
         <a href="/provider">Try provider flow example</a>
       </body></html>`,
-      { headers: { "Content-Type": "text/html;charset=utf8" } },
+      { headers: { "Content-Type": "text/html;charset=utf8" } }
     );
   }, {}),
 };
