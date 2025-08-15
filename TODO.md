@@ -10,3 +10,9 @@
 - Add it to `system[-ts].md`
 
 AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled.
+
+Bonus:
+
+- Having a way to track which users are logged in with which client_id's and when/where/how often they're active
+- When logged in, connect durable-worker with user-DO
+- Stripeflare must take user-ID and must be able to have metadata for payment callback with custom logic per metadata. May need different boundary.
