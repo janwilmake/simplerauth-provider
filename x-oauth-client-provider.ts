@@ -236,9 +236,10 @@ tag = "v1"
       ctx
     );
     const userData = await userDO.getUser();
-    if (userData?.user.username !== env.ADMIN_X_USERNAME) {
-      return new Response("Only admin can view DB");
+    if (userData?.user?.username !== env.ADMIN_X_USERNAME) {
+      return new Response("Only admin can view DB", { status: 401 });
     }
+
     const stub = getMultiStub(env.UserDO, [{ name: `aggregate` }], ctx);
     return studioMiddleware(request, stub.raw, {
       dangerouslyDisableAuth: true,
