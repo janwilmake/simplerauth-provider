@@ -20,9 +20,7 @@ This X OAuth client-provider uses the client's domain name as the client_id and 
 
 ## Setup: Hosted
 
-TODO:
-
-- Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
+TODO!
 
 ## Setup: Internal and Central
 
