@@ -6,13 +6,18 @@ This X OAuth client-provider uses the client's domain name as the client_id and 
 
 **Key Features:**
 
-- 🚀 No client registration required - use any domain as client_id
-- 🔒 Secure domain validation and HTTPS enforcement
-- 🎯 MCP (Model Context Protocol) compliant OAuth 2.0 implementation, including dynamic client registration
-- ⚡ Built for Cloudflare Workers with Durable Objects
-- 🌐 Standard OAuth 2.0 flow compatible with existing libraries
+- Makes your worker a oauth provider
+- No client registration required - use any domain as client_id
+- [MCP compatible Authorization](https://modelcontextprotocol.io/specification/draft/basic/authorization) including dynamic client registraiton fully supported
+- Uses [DORM](https://github.com/janwilmake/dorm) to expose admin panel with all users in aggregate (readonly) without compromising on performance (each user gets their own DO as source of truth)
 
-## Setup
+**3 ways to use it**
+
+1. **Internal** - Use directly in your cloudflare worker
+2. **Central** - Host as a separate worker and use as a central "OAuth Hub" for all your x-oauthed apps
+3. **Hosted** - Use directly from https://login.wilmake.com
+
+## Setup: Internal and Central
 
 1. Installation:
 
@@ -24,6 +29,7 @@ npm i x-oauth-client-provider
 
    - `X_CLIENT_ID`: Your X OAuth app client ID
    - `X_CLIENT_SECRET`: Your X OAuth app client secret
+   - `ADMIN_X_USERNAME`: Your X Username that needs access to `/admin`
 
 3. Add Durable Object binding to your `wrangler.toml`:
 
@@ -89,251 +95,9 @@ export default {
     }
 
     // Your app logic here
-    return new Response("Hello authenticated user!");
+    return new Response("Hello, authenticated user!");
   },
 };
-```
-
-## OAuth Provider Flow
-
-Your worker acts as an OAuth 2.0 provider that other applications can use for X authentication. Here's how any client application can integrate:
-
-### Client Integration Guide
-
-Any application at any domain can use your OAuth provider without registration. Here's a complete implementation:
-
-```typescript path="client-worker.ts"
-// Example client implementation for Cloudflare Workers
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/") {
-      return handleHome(request);
-    }
-
-    if (url.pathname === "/login") {
-      return handleLogin(request, env);
-    }
-
-    if (url.pathname === "/callback") {
-      return handleCallback(request, env);
-    }
-
-    if (url.pathname === "/profile") {
-      return handleProfile(request, env);
-    }
-
-    return new Response("Not found", { status: 404 });
-  },
-};
-
-async function handleHome(request: Request): Promise<Response> {
-  // Check if user has access token
-  const cookies = parseCookies(request.headers.get("Cookie") || "");
-  const accessToken = cookies.access_token;
-
-  if (accessToken) {
-    return new Response(
-      `
-      <html><body>
-        <h1>Welcome back!</h1>
-        <a href="/profile">View Profile</a> | 
-        <a href="/logout">Logout</a>
-      </body></html>
-    `,
-      { headers: { "Content-Type": "text/html" } }
-    );
-  }
-
-  return new Response(
-    `
-    <html><body>
-      <h1>My App</h1>
-      <p>Please login with X to continue.</p>
-      <a href="/login">Login with X</a>
-    </body></html>
-  `,
-    { headers: { "Content-Type": "text/html" } }
-  );
-}
-
-async function handleLogin(request: Request, env: Env): Promise<Response> {
-  const url = new URL(request.url);
-
-  // Your OAuth provider URL
-  const PROVIDER_URL = "https://your-oauth-provider.com";
-
-  // Generate CSRF state
-  const state = generateRandomString(32);
-
-  // Build authorization URL
-  const authUrl = new URL(`${PROVIDER_URL}/authorize`);
-  authUrl.searchParams.set("client_id", url.hostname); // Use domain as client_id
-  authUrl.searchParams.set("redirect_uri", `${url.origin}/callback`);
-  authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("state", state);
-  authUrl.searchParams.set("scope", "users.read tweet.read");
-
-  // Store state in cookie for validation
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: authUrl.toString(),
-      "Set-Cookie": `oauth_state=${state}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/`,
-    },
-  });
-}
-
-async function handleCallback(request: Request, env: Env): Promise<Response> {
-  const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state");
-
-  if (!code || !state) {
-    return new Response("Missing code or state parameter", { status: 400 });
-  }
-
-  // Validate state
-  const cookies = parseCookies(request.headers.get("Cookie") || "");
-  if (cookies.oauth_state !== state) {
-    return new Response("Invalid state parameter", { status: 400 });
-  }
-
-  // Exchange code for access token
-  const PROVIDER_URL = "https://your-oauth-provider.com";
-
-  const tokenResponse = await fetch(`${PROVIDER_URL}/token`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code: code,
-      client_id: url.hostname,
-      redirect_uri: `${url.origin}/callback`,
-    }),
-  });
-
-  if (!tokenResponse.ok) {
-    return new Response(`Token exchange failed: ${tokenResponse.status}`, {
-      status: 400,
-    });
-  }
-
-  const tokenData = (await tokenResponse.json()) as {
-    access_token: string;
-    token_type: string;
-    scope: string;
-  };
-
-  // Store access token and redirect to home
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: "/",
-      "Set-Cookie": [
-        `access_token=${tokenData.access_token}; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000; Path=/`,
-        `oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/`, // Clear state
-      ].join(", "),
-    },
-  });
-}
-
-async function handleProfile(request: Request, env: Env): Promise<Response> {
-  const cookies = parseCookies(request.headers.get("Cookie") || "");
-  const accessToken = cookies.access_token;
-
-  if (!accessToken) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: "/login" },
-    });
-  }
-
-  // Get user info from the OAuth provider's /me endpoint
-  const PROVIDER_URL = "https://your-oauth-provider.com";
-
-  try {
-    const userResponse = await fetch(`${PROVIDER_URL}/me`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!userResponse.ok) {
-      // Token might be expired, redirect to login
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: "/login",
-          "Set-Cookie": `access_token=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/`,
-        },
-      });
-    }
-
-    const userData = (await userResponse.json()) as {
-      data: {
-        id: string;
-        name: string;
-        username: string;
-        profile_image_url?: string;
-        verified?: boolean;
-      };
-    };
-
-    const user = userData.data;
-
-    return new Response(
-      `
-      <html><body>
-        <h1>Your X Profile</h1>
-        <div style="display: flex; align-items: center; gap: 20px;">
-          ${
-            user.profile_image_url
-              ? `<img src="${user.profile_image_url}" alt="Avatar" width="100" height="100" style="border-radius: 50px;">`
-              : ""
-          }
-          <div>
-            <h2>${user.name || user.username}</h2>
-            <p>@${user.username}</p>
-            <p>Verified: ${user.verified ? "✓" : "✗"}</p>
-            <p>ID: ${user.id}</p>
-          </div>
-        </div>
-        <p><a href="/">← Back to Home</a></p>
-      </body></html>
-    `,
-      {
-        headers: { "Content-Type": "text/html" },
-      }
-    );
-  } catch (error) {
-    return new Response(`Error fetching user data: ${error}`, { status: 500 });
-  }
-}
-
-function parseCookies(cookieHeader: string): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  cookieHeader.split(";").forEach((cookie) => {
-    const [name, value] = cookie.trim().split("=");
-    if (name && value) {
-      cookies[name] = decodeURIComponent(value);
-    }
-  });
-  return cookies;
-}
-
-function generateRandomString(length: number): string {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
 ```
 
 ### Step-by-Step Integration
@@ -405,6 +169,7 @@ The `/me` endpoint returns X user information in this format:
 
 Your OAuth provider exposes these endpoints:
 
+- `GET /admin` - Readonly DB Access to admin aggregate DB
 - `GET /authorize` - OAuth authorization endpoint
 - `POST /token` - OAuth token endpoint
 - `GET /callback` - X OAuth callback handler
