@@ -1,0 +1,28 @@
+{
+  "name": "x-oauth-client-provider-test",
+  "compatibility_date": "2025-01-27",
+  "routes": [
+    {
+      "custom_domain": true,
+      "pattern": "x-provider.simplerauth.com"
+    }
+  ],
+  "main": "decorator-demo.ts",
+  "assets": {
+    "directory": "./public"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "UserDO",
+        "class_name": "UserDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["UserDO"],
+      "tag": "v1"
+    }
+  ]
+}
