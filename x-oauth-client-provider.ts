@@ -1,3 +1,5 @@
+/// <reference types="@cloudflare/workers-types" />
+/// <reference lib="esnext" />
 import { DurableObject } from "cloudflare:workers";
 
 export interface Env {
@@ -44,7 +46,7 @@ export class UserDO extends DurableObject {
     encryptedAccessToken: string,
     clientId: string,
     redirectUri: string,
-    resource?: string,
+    resource?: string
   ) {
     await this.storage.put("data", {
       x_access_token: xAccessToken,
@@ -68,7 +70,7 @@ export class UserDO extends DurableObject {
   async setUser(
     user: XUser,
     xAccessToken: string,
-    encryptedAccessToken: string,
+    encryptedAccessToken: string
   ) {
     await this.storage.put("user", user);
     await this.storage.put("x_access_token", xAccessToken);
@@ -112,7 +114,7 @@ export async function handleOAuth(
   request: Request,
   env: Env,
   scope = "users.read tweet.read offline.access",
-  sameSite: "Strict" | "Lax" = "Lax",
+  sameSite: "Strict" | "Lax" = "Lax"
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -130,18 +132,140 @@ new_sqlite_classes = ["UserDO"]
 tag = "v1"
 
       `,
-      { status: 500 },
+      { status: 500 }
     );
   }
 
   // MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)
   if (path === "/.well-known/oauth-authorization-server") {
-    return handleAuthorizationServerMetadata(request, env, scope);
+    const metadata = {
+      issuer: url.origin,
+      authorization_endpoint: `${url.origin}/authorize`,
+      token_endpoint: `${url.origin}/token`,
+      // Public client without secret
+      token_endpoint_auth_methods_supported: ["none"],
+      registration_endpoint: `${url.origin}/register`,
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code"],
+      code_challenge_methods_supported: ["S256"],
+      scopes_supported: ["users.read", "tweet.read", "offline.access"],
+    };
+
+    return new Response(JSON.stringify(metadata, null, 2), {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=3600",
+      },
+    });
   }
 
-  // MCP Required: OAuth 2.0 Protected Resource Metadata (RFC9728)
+  // Protected resource metadata endpoint
   if (path === "/.well-known/oauth-protected-resource") {
-    return handleProtectedResourceMetadata(request, env);
+    const metadata = {
+      resource: url.origin,
+      authorization_servers: [url.origin],
+      scopes_supported: ["users.read", "tweet.read", "offline.access"],
+      bearer_methods_supported: ["header"],
+
+      resource_documentation: url.origin,
+    };
+
+    return new Response(JSON.stringify(metadata, null, 2), {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=3600",
+      },
+    });
+  }
+
+  if (path === "/register") {
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    try {
+      const body = await request.json();
+
+      // Validate redirect_uris is present and is an array
+      if (
+        !body.redirect_uris ||
+        !Array.isArray(body.redirect_uris) ||
+        body.redirect_uris.length === 0
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: "invalid_client_metadata",
+            error_description: "redirect_uris must be a non-empty array",
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Extract hosts from all redirect URIs
+      const hosts = new Set();
+      for (const uri of body.redirect_uris) {
+        try {
+          const url = new URL(uri);
+          hosts.add(url.host);
+        } catch (e) {
+          return new Response(
+            JSON.stringify({
+              error: "invalid_redirect_uri",
+              error_description: `Invalid redirect URI: ${uri}`,
+            }),
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+      }
+
+      // Ensure all redirect URIs have the same host
+      if (hosts.size !== 1) {
+        return new Response(
+          JSON.stringify({
+            error: "invalid_client_metadata",
+            error_description: "All redirect URIs must have the same host",
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const clientHost = Array.from(hosts)[0];
+
+      // Response with client_id as the host
+      const response = {
+        client_id: clientHost,
+        redirect_uris: body.redirect_uris,
+        token_endpoint_auth_method: "none", // Public client, no secret needed
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+      };
+
+      return new Response(JSON.stringify(response, null, 2), {
+        status: 201,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          Pragma: "no-cache",
+        },
+      });
+    } catch (error) {
+      return new Response(
+        JSON.stringify({
+          error: "invalid_client_metadata",
+          error_description: "Invalid JSON in request body",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
   }
 
   if (path === "/token") {
@@ -218,7 +342,7 @@ async function handleMe(request: Request, env: Env): Promise<Response> {
           ...headers,
           "WWW-Authenticate": 'Bearer realm="main"',
         },
-      },
+      }
     );
   }
 
@@ -240,7 +364,7 @@ async function handleMe(request: Request, env: Env): Promise<Response> {
             ...headers,
             "WWW-Authenticate": 'Bearer realm="main", error="invalid_token"',
           },
-        },
+        }
       );
     }
 
@@ -249,7 +373,7 @@ async function handleMe(request: Request, env: Env): Promise<Response> {
       JSON.stringify({
         data: userData.user,
       }),
-      { headers },
+      { headers }
     );
   } catch (error) {
     console.error("Error retrieving user data:", error);
@@ -261,68 +385,16 @@ async function handleMe(request: Request, env: Env): Promise<Response> {
       {
         status: 500,
         headers,
-      },
+      }
     );
   }
-}
-
-// MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)
-function handleAuthorizationServerMetadata(
-  request: Request,
-  env: Env,
-  scope: string,
-): Response {
-  const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
-
-  const metadata = {
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/authorize`,
-    token_endpoint: `${baseUrl}/token`,
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code"],
-    code_challenge_methods_supported: ["S256"],
-    scopes_supported: scope.split(" "),
-    token_endpoint_auth_methods_supported: ["none"], // Public client support
-  };
-
-  return new Response(JSON.stringify(metadata), {
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-  });
-}
-
-// MCP Required: OAuth 2.0 Protected Resource Metadata (RFC9728)
-function handleProtectedResourceMetadata(request: Request, env: Env): Response {
-  const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
-
-  const metadata = {
-    resource: baseUrl,
-    authorization_servers: [baseUrl],
-    bearer_methods_supported: ["header"],
-    resource_documentation: `${baseUrl}`,
-  };
-
-  return new Response(JSON.stringify(metadata), {
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-  });
 }
 
 async function handleAuthorize(
   request: Request,
   env: Env,
   scope: string,
-  sameSite: string,
+  sameSite: string
 ): Promise<Response> {
   const url = new URL(request.url);
   const clientId = url.searchParams.get("client_id");
@@ -361,7 +433,7 @@ async function handleAuthorize(
       headers: {
         Location: xUrl.toString(),
         "Set-Cookie": `oauth_state=${encodeURIComponent(
-          stateString,
+          stateString
         )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`,
       },
     });
@@ -392,7 +464,7 @@ async function handleAuthorize(
     if (redirectUrl.hostname !== clientId) {
       return new Response(
         "Invalid redirect_uri: must be on same origin as client_id",
-        { status: 400 },
+        { status: 400 }
       );
     }
   } catch {
@@ -414,7 +486,7 @@ async function handleAuthorize(
       redirectUri,
       state,
       accessToken,
-      resource,
+      resource
     );
   }
 
@@ -456,14 +528,14 @@ async function handleAuthorize(
   headers.append(
     "Set-Cookie",
     `oauth_state=${encodeURIComponent(
-      xStateString,
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`,
+      xStateString
+    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
   );
   headers.append(
     "Set-Cookie",
     `provider_state=${encodeURIComponent(
-      providerStateString,
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`,
+      providerStateString
+    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
@@ -475,7 +547,7 @@ async function createAuthCodeAndRedirect(
   redirectUri: string,
   state: string | null,
   encryptedAccessToken: string,
-  resource?: string,
+  resource?: string
 ): Promise<Response> {
   // Generate auth code
   const authCode = generateCodeVerifier(); // Reuse the same random generation
@@ -492,7 +564,7 @@ async function createAuthCodeAndRedirect(
     encryptedAccessToken,
     clientId,
     redirectUri,
-    resource, // MCP: Store resource parameter
+    resource // MCP: Store resource parameter
   );
 
   // Redirect back to client with auth code
@@ -511,7 +583,7 @@ async function createAuthCodeAndRedirect(
 async function handleToken(
   request: Request,
   env: Env,
-  scope: string,
+  scope: string
 ): Promise<Response> {
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
@@ -609,14 +681,14 @@ async function handleToken(
       token_type: "bearer",
       scope,
     }),
-    { headers },
+    { headers }
   );
 }
 
 async function handleCallback(
   request: Request,
   env: Env,
-  sameSite: string,
+  sameSite: string
 ): Promise<Response> {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -649,7 +721,7 @@ async function handleCallback(
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       Authorization: `Basic ${btoa(
-        `${env.X_CLIENT_ID}:${env.X_CLIENT_SECRET}`,
+        `${env.X_CLIENT_ID}:${env.X_CLIENT_SECRET}`
       )}`,
     },
     body: new URLSearchParams({
@@ -665,7 +737,7 @@ async function handleCallback(
       `X API responded with ${
         tokenResponse.status
       } - ${await tokenResponse.text()}`,
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -682,7 +754,7 @@ async function handleCallback(
       headers: {
         Authorization: `Bearer ${tokenData.access_token}`,
       },
-    },
+    }
   );
 
   if (!userResponse.ok) {
@@ -693,12 +765,12 @@ async function handleCallback(
   const user = userData.data as XUser;
   user.profile_image_url = user.profile_image_url?.replace(
     "_normal",
-    "_400x400",
+    "_400x400"
   );
   // Encrypt the X access token
   const encryptedAccessToken = await encrypt(
     tokenData.access_token,
-    env.X_CLIENT_SECRET,
+    env.X_CLIENT_SECRET
   );
 
   // Store user data in Durable Object with "user:" prefix
@@ -719,22 +791,22 @@ async function handleCallback(
         providerState.redirectUri,
         providerState.state,
         encryptedAccessToken,
-        providerState.resource, // MCP: Pass through resource parameter
+        providerState.resource // MCP: Pass through resource parameter
       );
 
       // Set access token cookie and clear state cookies
       const headers = new Headers(response.headers);
       headers.append(
         "Set-Cookie",
-        `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`,
+        `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `provider_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`,
+        `provider_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `access_token=${encryptedAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`,
+        `access_token=${encryptedAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
       );
 
       return new Response(response.body, { status: response.status, headers });
@@ -747,11 +819,11 @@ async function handleCallback(
   const headers = new Headers({ Location: state.redirectTo || "/" });
   headers.append(
     "Set-Cookie",
-    `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`,
+    `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
   );
   headers.append(
     "Set-Cookie",
-    `access_token=${encryptedAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`,
+    `access_token=${encryptedAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
@@ -779,7 +851,7 @@ export function getAccessToken(request: Request): string | null {
  */
 export function validateTokenAudience(
   request: Request,
-  expectedResource: string,
+  expectedResource: string
 ): boolean {
   // For this simple implementation, we assume tokens encrypted with our secret
   // are valid for our resource. In a production system, you would decode
@@ -826,7 +898,7 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", data);
 
   return btoa(
-    String.fromCharCode.apply(null, Array.from(new Uint8Array(digest))),
+    String.fromCharCode.apply(null, Array.from(new Uint8Array(digest)))
   )
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -842,7 +914,7 @@ async function encrypt(text: string, secret: string): Promise<string> {
     encoder.encode(secret),
     { name: "PBKDF2" },
     false,
-    ["deriveKey"],
+    ["deriveKey"]
   );
 
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -856,19 +928,19 @@ async function encrypt(text: string, secret: string): Promise<string> {
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     false,
-    ["encrypt"],
+    ["encrypt"]
   );
 
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv },
     key,
-    data,
+    data
   );
 
   // Combine salt + iv + encrypted data
   const combined = new Uint8Array(
-    salt.length + iv.length + encrypted.byteLength,
+    salt.length + iv.length + encrypted.byteLength
   );
   combined.set(salt, 0);
   combined.set(iv, salt.length);
@@ -888,7 +960,7 @@ async function decrypt(encrypted: string, secret: string): Promise<string> {
   const combined = new Uint8Array(
     atob(encrypted.replace(/-/g, "+").replace(/_/g, "/"))
       .split("")
-      .map((c) => c.charCodeAt(0)),
+      .map((c) => c.charCodeAt(0))
   );
 
   // Extract salt, iv, and encrypted data
@@ -901,7 +973,7 @@ async function decrypt(encrypted: string, secret: string): Promise<string> {
     encoder.encode(secret),
     { name: "PBKDF2" },
     false,
-    ["deriveKey"],
+    ["deriveKey"]
   );
 
   const key = await crypto.subtle.deriveKey(
@@ -914,13 +986,13 @@ async function decrypt(encrypted: string, secret: string): Promise<string> {
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     false,
-    ["decrypt"],
+    ["decrypt"]
   );
 
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: iv },
     key,
-    data,
+    data
   );
 
   return decoder.decode(decrypted);
@@ -955,14 +1027,14 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     scope?: string;
     /** Defaults to 'Lax' meaning subdomains are also valid to use the cookies */
     sameSite?: "Strict" | "Lax";
-  },
+  }
 ): ExportedHandlerFetchHandler<Env & TEnv> {
   const { scope, sameSite } = config || {};
 
   return async (
     request: Request,
     env: TEnv & Env,
-    ctx: ExecutionContext,
+    ctx: ExecutionContext
   ): Promise<Response> => {
     const oauth = await handleOAuth(request, env, scope, sameSite);
     if (oauth) {
@@ -1013,7 +1085,7 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
             // MCP Required: WWW-Authenticate header with resource metadata URL (RFC9728)
             "WWW-Authenticate": `Bearer realm="main", login_url="${Location}", resource_metadata="${resourceMetadataUrl}"`,
           },
-        },
+        }
       );
     }
 
