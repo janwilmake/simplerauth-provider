@@ -30,6 +30,11 @@ export interface XUser {
   [key: string]: any;
 }
 
+const isQueryReadOnly = (query: string) => {
+  // TODO: refine this
+  return query.toLowerCase().startsWith("select ");
+};
+
 @Queryable()
 export class UserDO extends DurableObject {
   private storage: DurableObjectStorage;
@@ -241,9 +246,16 @@ tag = "v1"
     }
 
     const stub = getMultiStub(env.UserDO, [{ name: `aggregate` }], ctx);
-    return studioMiddleware(request, stub.raw, {
-      dangerouslyDisableAuth: true,
-    });
+    return studioMiddleware(
+      request,
+      async (query: string, ...bindings: any[]) => {
+        if (isQueryReadOnly(query)) {
+          return stub.raw(query, ...bindings);
+        }
+        return { rowsRead: 0, rowsWritten: 0, raw: [], columnNames: [] };
+      },
+      { dangerouslyDisableAuth: true }
+    );
   }
 
   // MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)

@@ -1,11 +1,11 @@
-X OAuth Provider allows for zero-config X OAuth for all your applications.
+**SimplerAuth Provider** allows for zero-config X OAuth for all your applications and downstream clients.
 
 # Why
 
 - X Free or Basic just allows creating a single client
 - A single client can have up to just 10 callback URLs, which limits you in how many apps you can create
 - To bypass this problem, you can use the `simplerauth-client` to create unlimited X Authed Apps (even without a client)
-- **Simpler** - wrap your fetch handler with `withSimplerAuth(handler,config)` and you'll have access to `ctx.user`. That's literally it!
+- Wrap your fetch handler with `withSimplerAuth(handler,config)` and you'll have access to `ctx.user`. That's literally it!
 
 # Features
 

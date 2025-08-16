@@ -17,33 +17,34 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 - ✅ Turn users into a table
 - ✅ Add multistub and queryable-object and enable admin login
 
-AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled.
-
 # TODO
 
-## provider
+AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled (flaredream).
 
-- ✅ Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
-- 🤔 Figure out if we should require a unique access_token per client-id (since we may wanna reuse it directly for api calls, it makes sense)
+## Provider
+
+- 🤔 Figure out if we should require a unique access_token per client-id (since we may wanna reuse it directly for api calls, it makes sense) **yes we do**
+- ✅ Improved structure and README of this repo. A lot.
+- ✅ Make admin truly read-only
 - ❗️ Ensure the access-token encodes the `user_id` as well as the `client_id` (needs new table `logins`): now, each client has a different access tokens for each user, and there can be as many as required.
 - use user_id for DO name
 - don't use `aggregate` for read-only queries
 - Every new login would create a new unique login! To not overwrite other devices.
 - Keep track of created at, updated at, and request_count in logins!!! Super valueable stats
 - 🟠 Add configuration `allowedClients` to restrict which clients can authorize.
-- Make admin truly read-only
-- Expose `/query` and MCP for that
+- For admin, also expose `/query` and MCP for that
+- Also expose `llms.txt` and `openapi.json` for the provider.
 
 ## Client
 
+- ✅ Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
 - Change registered scopes in `simplerauth-client` to just `profile` (standard)
 - Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
-- Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`.
-- Add it to `system[-ts].md`
 
 ## Content
 
-- Lay out the concept of `domain-as-client-id` and explain MCP-recommended programmatic oauth flow. This is also great to share on X and with the team.
+- Lay out the concept of `domain-as-client-id` and explain MCP-recommended programmatic oauth flow.
+- This is also great to share on X and with the team.
 
 ## Apply it
 
@@ -52,8 +53,11 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
 
 ## Bonus
 
+- Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`.
+- Add it to `system[-ts].md`
 - Flaredream: When logged in, connect durable-worker with user-DO.
 - Stripeflare must take user-ID and must be able to have metadata for payment callback with custom logic per metadata. May need different boundary.
+- Create @wilmakesystems account with more subtle profile picture, and align the logo with that, so login comes over more trustworthy.
 
 ## Meeting Mv:
 
