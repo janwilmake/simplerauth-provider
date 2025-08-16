@@ -9,19 +9,14 @@ export default {
       });
     }
     return new Response(
-      `<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>X OAuth Demo</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font:16px/1.5 -apple-system,sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;display:flex;align-items:center;justify-content:center;color:#fff}main{background:rgba(255,255,255,.1);backdrop-filter:blur(10px);border-radius:20px;padding:40px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3);max-width:400px;width:90%}h1{font-size:28px;margin-bottom:20px;text-shadow:0 2px 4px rgba(0,0,0,.3)}img{border-radius:50%;border:4px solid rgba(255,255,255,.3);margin:20px 0;transition:transform .3s ease}img:hover{transform:scale(1.1)}p{margin:10px 0;font-size:18px}.verified{color:#1da1f2}.username{font-weight:bold;font-size:20px}a{display:inline-block;margin:10px 8px;padding:12px 24px;background:rgba(255,255,255,.2);color:#fff;text-decoration:none;border-radius:25px;transition:all .3s ease;border:1px solid rgba(255,255,255,.3)}a:hover{background:rgba(255,255,255,.3);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.2)}</style></head><body><main>
-        <h1>✨ X OAuth Demo</h1>
-        <p class="username">Welcome, ${ctx.user.name || ctx.user.username}!</p>
-        <img src="${
-          ctx.user.profile_image_url || "/default-avatar.png"
-        }" alt="Avatar" width="120" height="120">
-        <p>@${ctx.user.username}</p>
-        <p class="verified">${
-          ctx.user.verified ? "✓ Verified" : "Not verified"
-        }</p>
-        <div><a href="/logout">Logout</a><a href="/provider">Try Provider Flow</a></div>
-      </main></body></html>`,
-      { headers: { "Content-Type": "text/html;charset=utf-8" } }
+      `<html><head><meta charset="utf8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SimplerAuth X Provider</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font:14px system-ui;background:#fcfcfa;color:#1d1b16;min-height:100vh;display:flex;align-items:center;justify-content:center}@media(prefers-color-scheme:dark){body{background:#1d1b16;color:#fcfcfa}}.card{background:#fcfcfa;border:1px solid #d8d0bf;border-radius:12px;padding:24px;text-align:center;box-shadow:0 2px 8px rgba(29,27,22,.1);max-width:320px}@media(prefers-color-scheme:dark){.card{background:#1d1b16;border-color:#d8d0bf33}}.avatar{width:80px;height:80px;border-radius:50%;margin:0 auto 16px;display:block;border:2px solid #d8d0bf}h1{font-size:20px;margin-bottom:16px}p{margin-bottom:8px;color:#d8d0bf}.name{color:#1d1b16;font-weight:600;font-size:16px}@media(prefers-color-scheme:dark){.name{color:#fcfcfa}}a{color:#fb631b;text-decoration:none;margin:8px 12px 0;display:inline-block}a:hover{text-decoration:underline}</style></head><body><div class="card"><img src="${
+        ctx.user.profile_image_url || "/default-avatar.png"
+      }" alt="Avatar" class="avatar"><h1>SimplerAuth X Provider</h1><p class="name">${
+        ctx.user.name || ctx.user.username
+      }</p><p>@${ctx.user.username}</p><p>${
+        ctx.user.verified ? "✓ Verified" : "Unverified"
+      }</p><a href="/logout">Logout</a></div></body></html>`,
+      { headers: { "Content-Type": "text/html;charset=utf8" } }
     );
   }, {}),
 };
