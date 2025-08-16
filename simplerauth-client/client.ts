@@ -2,12 +2,20 @@
 
 export interface UserContext extends ExecutionContext {
   /** Authenticated user from the OAuth provider */
-  user: any | undefined;
+  user: User | undefined;
   /** Access token for API calls */
   accessToken: string | undefined;
   /** Whether user is authenticated */
   authenticated: boolean;
 }
+
+type User = {
+  id: string;
+  name: string;
+  username: string;
+  profile_image_url?: string | undefined;
+  verified?: boolean | undefined;
+};
 
 interface UserFetchHandler<TEnv = {}> {
   (request: Request, env: TEnv, ctx: UserContext): Response | Promise<Response>;
@@ -33,7 +41,7 @@ export function withSimplerAuth<TEnv = {}>(
 ): ExportedHandlerFetchHandler<TEnv> {
   const {
     isLoginRequired = false,
-    scope = "users.read tweet.read offline.access",
+    scope = "profile",
     sameSite = "Lax",
     providerHostname = "login.wilmake.com",
   } = config;
@@ -76,7 +84,7 @@ export function withSimplerAuth<TEnv = {}>(
     }
 
     // Get user from access token
-    let user: any | undefined = undefined;
+    let user: User | undefined = undefined;
     let authenticated = false;
     const accessToken = getAccessToken(request);
 
@@ -90,7 +98,7 @@ export function withSimplerAuth<TEnv = {}>(
         });
 
         if (userResponse.ok) {
-          const userData = await userResponse.json();
+          const userData: { data: User } = await userResponse.json();
           user = userData.data;
           authenticated = true;
         }
@@ -149,7 +157,7 @@ function handleAuthorizationServerMetadata(
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
-    scopes_supported: ["users.read", "tweet.read", "offline.access"],
+    scopes_supported: ["profile"],
   };
 
   return new Response(JSON.stringify(metadata, null, 2), {
@@ -167,7 +175,7 @@ function handleProtectedResourceMetadata(
   const metadata = {
     resource: url.origin,
     authorization_servers: [`https://${providerHostname}`],
-    scopes_supported: ["users.read", "tweet.read", "offline.access"],
+    scopes_supported: ["profile"],
     bearer_methods_supported: ["header", "body"],
     resource_documentation: url.origin,
   };
@@ -336,6 +344,16 @@ async function handleMe(
   });
 
   // Return the provider's response with CORS headers
+
+  type UserResult = {
+    data: {
+      id: string;
+      name: string;
+      username: string;
+      profile_image_url?: string | undefined;
+      verified?: boolean | undefined;
+    };
+  };
   const newResponse = new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

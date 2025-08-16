@@ -17,10 +17,6 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 - ✅ Turn users into a table
 - ✅ Add multistub and queryable-object and enable admin login
 
-# TODO
-
-AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled (flaredream).
-
 ## Provider
 
 - 🤔 Figure out if we should require a unique access_token per client-id (since we may wanna reuse it directly for api calls, it makes sense) **yes we do**
@@ -34,29 +30,30 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
   - For all DO functions that affect either the logins or users table, use `user:${user_id}` for DO name. we can decrypt the access token to know the user_id
   - no backwards compatibility required
 - ✅ Every new login would create a new unique login! To not overwrite other devices.
-- Don't hit `aggregate` for read-only queries
 - ✅ Keep track of created at, updated at, and request_count in logins!!! Super valueable stats. The logic should be as follows:
   - upon /callback, set last_active_at.
   - when calling /me, if last_active_at is more than an hour old but less than 4 hours old, only update last_active_at. if last_active_at is more than 4 hours old, increment session_count (there was inactivity for >3 hours)
-- 🟠 Add configuration `allowedClients` to restrict which clients can authorize.
-- For admin, also expose `/query` and MCP for that
-- Also expose `llms.txt` and `openapi.json` for the provider.
+- ✅ Client needs `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
+- ✅ Change registered scopes in `simplerauth-client` to just `profile` (standard)
 
-## Client
+# TODO
 
-- ✅ Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
-- Change registered scopes in `simplerauth-client` to just `profile` (standard)
+AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled (flaredream).
+
+- Change to use `simplerauth-client` in `universal-oauth-provider`, `basedpeople` and finally `markdownfeed` (and from now on, everywhere)
+- Test markdownfeed MCP with https://universal.simplerauth.com
 - Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
+
+## Scalability
+
+- Figure out how I can reduce load on aggregate.
+- Add per-client ratelimit (1200 requests per minute should do) to prevent capacity constraints and DDOS problems
+- Write a section in readme about scalability and performance, and how this may improve in the future (moving DOs around)
 
 ## Content
 
 - Lay out the concept of `domain-as-client-id` and explain MCP-recommended programmatic oauth flow.
 - This is also great to share on X and with the team.
-
-## Apply it
-
-- Change to use this provider in `markdownfeed`, `universal-oauth-provider`, and `basedpeople` (and from now on, everywhere)
-- Test markdownfeed MCP with https://universal.simplerauth.com
 
 ## Bonus
 
@@ -65,6 +62,9 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
 - Flaredream: When logged in, connect durable-worker with user-DO.
 - Stripeflare must take user-ID and must be able to have metadata for payment callback with custom logic per metadata. May need different boundary.
 - Create @wilmakesystems account with more subtle profile picture, and align the logo with that, so login comes over more trustworthy.
+- Add configuration `allowedClients` to restrict which clients can authorize.
+- For admin, also expose `/query` and MCP for that
+- Also expose `llms.txt` and `openapi.json` for the provider.
 
 ## Meeting Mv:
 

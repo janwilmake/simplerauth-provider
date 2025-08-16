@@ -8,7 +8,7 @@ import {
   studioMiddleware,
 } from "queryable-object";
 
-const USER_DO_PREFIX = "user-v2:";
+const USER_DO_PREFIX = "user-v4:";
 
 export interface Env {
   SELF_CLIENT_ID: string;
@@ -462,7 +462,10 @@ tag = "v1"
 
       const userDO = getMultiStub(
         env.UserDO,
-        [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
+        [
+          { name: `${USER_DO_PREFIX}${userId}` },
+          { name: `${USER_DO_PREFIX}aggregate:` },
+        ],
         ctx
       );
       const userData = await userDO.getUser();
@@ -470,7 +473,11 @@ tag = "v1"
         return new Response("Only admin can view DB", { status: 401 });
       }
 
-      const stub = getMultiStub(env.UserDO, [{ name: `aggregate` }], ctx);
+      const stub = getMultiStub(
+        env.UserDO,
+        [{ name: `${USER_DO_PREFIX}aggregate:` }],
+        ctx
+      );
       return studioMiddleware(
         request,
         async (query: string, ...bindings: any[]) => {
@@ -712,7 +719,10 @@ async function handleMe(
     // Get user data from Durable Object using user_id
     const userDO = getMultiStub(
       env.UserDO,
-      [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
+      [
+        { name: `${USER_DO_PREFIX}${userId}` },
+        { name: `${USER_DO_PREFIX}aggregate:` },
+      ],
       ctx
     );
 
@@ -1068,7 +1078,10 @@ async function handleToken(
   const userId = authData.access_token; // This is now the user_id
   const userDO = getMultiStub(
     env.UserDO,
-    [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
+    [
+      { name: `${USER_DO_PREFIX}${userId}` },
+      { name: `${USER_DO_PREFIX}aggregate:` },
+    ],
     ctx
   );
 
@@ -1169,7 +1182,10 @@ async function handleCallback(
   // Store user in their DO - this will set last_active_at to now
   const userDO = getMultiStub(
     env.UserDO,
-    [{ name: `${USER_DO_PREFIX}${user.id}` }, { name: "aggregate" }],
+    [
+      { name: `${USER_DO_PREFIX}${user.id}` },
+      { name: `${USER_DO_PREFIX}aggregate:` },
+    ],
     ctx
   );
   await userDO.setUser(user, tokenData.access_token);
@@ -1473,7 +1489,10 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
         // Get user data from Durable Object using user_id
         userDO = getMultiStub(
           env.UserDO,
-          [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
+          [
+            { name: `${USER_DO_PREFIX}${userId}` },
+            { name: `${USER_DO_PREFIX}aggregate:` },
+          ],
           ctx
         );
 

@@ -12,7 +12,7 @@ export default {
     {
       isLoginRequired: true, // Force login
       providerHostname: "login.wilmake.com", // Your OAuth provider
-      scope: "users.read tweet.read offline.access",
+      scope: "profile",
       sameSite: "Lax",
     }
   ),
