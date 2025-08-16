@@ -10,9 +10,6 @@
     }
   ],
   "main": "main.ts",
-  "assets": {
-    "directory": "./public"
-  },
   "durable_objects": {
     "bindings": [
       {

@@ -26,9 +26,14 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
 - 🤔 Figure out if we should require a unique access_token per client-id (since we may wanna reuse it directly for api calls, it makes sense) **yes we do**
 - ✅ Improved structure and README of this repo. A lot.
 - ✅ Make admin truly read-only
-- ❗️ Ensure the access-token encodes the `user_id` as well as the `client_id` (needs new table `logins`): now, each client has a different access tokens for each user, and there can be as many as required.
-- use user_id for DO name
-- don't use `aggregate` for read-only queries
+- ✅ Create a new table `logins` that holds the access_token. Store x_access_token on the users, but access_token on the logins.
+- ✅ Update datastructure
+  - Create a new table `logins` that holds the access_token. Store x_access_token on the users, but access_token on the logins.
+  - Ensure the access-token encodes and encrypts `user_id` as well as the `client_id` plus the x access token.
+  - access*token format is of format simple*{encrypted_data} where the decrypted is in format `user_id:client_id:token` to keep it short. encrypted with env.X_CLIENT_SECRET. Now, each client has a different access tokens for each user, and there can be as many as required.
+  - For all DO functions that affect either the logins or users table, use `user:${user_id}` for DO name. we can decrypt the access token to know the user_id
+  - no backwards compatibility required
+- Don't hit `aggregate` for read-only queries
 - Every new login would create a new unique login! To not overwrite other devices.
 - Keep track of created at, updated at, and request_count in logins!!! Super valueable stats
 - 🟠 Add configuration `allowedClients` to restrict which clients can authorize.

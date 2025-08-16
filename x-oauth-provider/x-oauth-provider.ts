@@ -9,6 +9,7 @@ import {
 } from "queryable-object";
 
 export interface Env {
+  SELF_CLIENT_ID: string;
   X_CLIENT_ID: string;
   X_CLIENT_SECRET: string;
   ENCRYPTION_SECRET: string;
@@ -1037,11 +1038,7 @@ async function handleCallback(
   // Get user info from X API
   const userResponse = await fetch(
     "https://api.x.com/2/users/me?user.fields=profile_image_url,verified",
-    {
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`,
-      },
-    }
+    { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
   );
 
   if (!userResponse.ok) {
@@ -1106,7 +1103,10 @@ async function handleCallback(
   }
 
   // Normal redirect (direct login) - create access token for browser client
-  const browserAccessToken = await userDO.createLogin(user.id, "browser");
+  const browserAccessToken = await userDO.createLogin(
+    user.id,
+    env.SELF_CLIENT_ID
+  );
 
   const headers = new Headers({ Location: state.redirectTo || "/" });
   headers.append(
