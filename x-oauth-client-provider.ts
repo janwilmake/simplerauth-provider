@@ -276,7 +276,6 @@ tag = "v1"
       authorization_servers: [url.origin],
       scopes_supported: ["users.read", "tweet.read", "offline.access"],
       bearer_methods_supported: ["header"],
-
       resource_documentation: url.origin,
     };
 

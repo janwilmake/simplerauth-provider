@@ -1,11 +1,12 @@
 # This weekend (or monday)
 
-- Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
+- ✅ Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
 - Change to use this provider in `markdownfeed`, `universal-oauth-provider`, and `basedpeople` (and from now on, everywhere)
 - Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
 - Think about the permissiveness of giving user to every client after one approval - be super clear on this!
 - Lay out the concept of `domain-as-client-id` and explain MCP-recommended programmatic oauth flow. This is also great to share on X and with the team.
 - Test markdownfeed MCP with https://universal.simplerauth.com
+- Figure out if we should require a unique access_token per client-id (since we may wanna reuse it directly for api calls, it makes sense)
 - Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`.
 - Add it to `system[-ts].md`
 
@@ -16,3 +17,7 @@ Bonus:
 - Having a way to track which users are logged in with which client_id's and when/where/how often they're active
 - When logged in, connect durable-worker with user-DO
 - Stripeflare must take user-ID and must be able to have metadata for payment callback with custom logic per metadata. May need different boundary.
+
+Meeting Mv:
+
+- Make standalone POC OAuth with all MCP stuff?

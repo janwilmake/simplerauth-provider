@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "simplerauth_x-downstream",
+  "compatibility_date": "2025-08-16",
+  "main": "demo.ts",
+  "route": {
+    "custom_domain": true,
+    "pattern": "client.simplerauth.com"
+  }
+}
