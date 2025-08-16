@@ -5,12 +5,13 @@ import { getMultiStub } from "multistub";
 import {
   Queryable,
   QueryableHandler,
-  QueryableObject,
   studioMiddleware,
 } from "queryable-object";
+
 export interface Env {
   X_CLIENT_ID: string;
   X_CLIENT_SECRET: string;
+  ENCRYPTION_SECRET: string;
   ADMIN_X_USERNAME: string;
   UserDO: DurableObjectNamespace<UserDO & QueryableHandler>;
 }
@@ -39,11 +40,12 @@ const isQueryReadOnly = (query: string) => {
 export class UserDO extends DurableObject {
   private storage: DurableObjectStorage;
   public sql: SqlStorage;
-
+  public env: Env;
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
     this.storage = state.storage;
     this.sql = state.storage.sql;
+    this.env = env;
 
     // Initialize users table
     this.sql.exec(`
@@ -54,10 +56,20 @@ export class UserDO extends DurableObject {
         profile_image_url TEXT,
         verified BOOLEAN DEFAULT FALSE,
         x_access_token TEXT NOT NULL,
-        access_token TEXT NOT NULL,
         created_at INTEGER DEFAULT (unixepoch()),
         updated_at INTEGER DEFAULT (unixepoch()),
         additional_data TEXT DEFAULT '{}'
+      )
+    `);
+
+    // Initialize logins table
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS logins (
+        access_token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        created_at INTEGER DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users (user_id)
       )
     `);
 
@@ -103,11 +115,7 @@ export class UserDO extends DurableObject {
     }>("data");
   }
 
-  async setUser(
-    user: XUser,
-    xAccessToken: string,
-    encryptedAccessToken: string
-  ) {
+  async setUser(user: XUser, xAccessToken: string) {
     const now = Math.floor(Date.now() / 1000);
 
     // Extract standard fields
@@ -123,24 +131,52 @@ export class UserDO extends DurableObject {
     // Store user in SQLite
     this.sql.exec(
       `INSERT OR REPLACE INTO users 
-       (user_id, name, username, profile_image_url, verified, x_access_token, access_token, updated_at, additional_data)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (user_id, name, username, profile_image_url, verified, x_access_token, updated_at, additional_data)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       name,
       username,
       profile_image_url || null,
       verified || false,
       xAccessToken,
-      encryptedAccessToken,
       now,
       JSON.stringify(additionalData)
     );
   }
 
+  async createLogin(userId: string, clientId: string): Promise<string> {
+    // Get the user's X access token
+    const user = this.sql
+      .exec(`SELECT x_access_token FROM users WHERE user_id = ?`, userId)
+      .toArray()[0];
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const xAccessToken = user.x_access_token as string;
+
+    // Create access token in format user_id:client_id:x_access_token
+    const tokenData = `${userId}:${clientId}:${xAccessToken}`;
+    const encryptedData = await encrypt(tokenData, this.env.ENCRYPTION_SECRET);
+    const accessToken = `simple_${encryptedData}`;
+
+    // Store login
+    this.sql.exec(
+      `INSERT OR REPLACE INTO logins (access_token, user_id, client_id)
+       VALUES (?, ?, ?)`,
+      accessToken,
+      userId,
+      clientId
+    );
+
+    return accessToken;
+  }
+
   async getUser(): Promise<{
     user: XUser;
     xAccessToken: string;
-    accessToken: string;
+    accessToken?: string;
   } | null> {
     const result = this.sql.exec(`SELECT * FROM users LIMIT 1`).toArray()[0];
 
@@ -166,8 +202,76 @@ export class UserDO extends DurableObject {
     return {
       user,
       xAccessToken: result.x_access_token as string,
-      accessToken: result.access_token as string,
     };
+  }
+
+  async getUserByAccessToken(accessToken: string): Promise<{
+    user: XUser;
+    xAccessToken: string;
+    clientId: string;
+  } | null> {
+    try {
+      // Decrypt the access token to get user_id, client_id, and x_access_token
+      if (!accessToken.startsWith("simple_")) {
+        return null;
+      }
+
+      const encryptedData = accessToken.substring(7); // Remove 'simple_' prefix
+      const decryptedData = await decrypt(
+        encryptedData,
+        this.env.ENCRYPTION_SECRET
+      );
+      const [userId, clientId, xAccessToken] = decryptedData.split(":");
+
+      // Verify login exists
+      const loginResult = this.sql
+        .exec(
+          `SELECT * FROM logins WHERE access_token = ? AND user_id = ? AND client_id = ?`,
+          accessToken,
+          userId,
+          clientId
+        )
+        .toArray()[0];
+
+      if (!loginResult) {
+        return null;
+      }
+
+      // Get user data
+      const userResult = this.sql
+        .exec(`SELECT * FROM users WHERE user_id = ?`, userId)
+        .toArray()[0];
+
+      if (!userResult) {
+        return null;
+      }
+
+      // Reconstruct user object
+      const additionalData = JSON.parse(
+        (userResult.additional_data as string) || "{}"
+      );
+      const user: XUser = {
+        id: userResult.user_id as string,
+        name: userResult.name as string,
+        username: userResult.username as string,
+        ...(userResult.profile_image_url && {
+          profile_image_url: userResult.profile_image_url as string,
+        }),
+        ...(userResult.verified && {
+          verified: userResult.verified as boolean,
+        }),
+        ...additionalData,
+      };
+
+      return {
+        user,
+        xAccessToken,
+        clientId,
+      };
+    } catch (error) {
+      console.error("Error decrypting access token:", error);
+      return null;
+    }
   }
 
   async setMetadata<T>(metadata: T) {
@@ -235,27 +339,41 @@ tag = "v1"
         }
       );
     }
-    const userDO = getMultiStub(
-      env.UserDO,
-      [{ name: `user:${accessToken}` }, { name: "aggregate" }],
-      ctx
-    );
-    const userData = await userDO.getUser();
-    if (userData?.user?.username !== env.ADMIN_X_USERNAME) {
-      return new Response("Only admin can view DB", { status: 401 });
-    }
 
-    const stub = getMultiStub(env.UserDO, [{ name: `aggregate` }], ctx);
-    return studioMiddleware(
-      request,
-      async (query: string, ...bindings: any[]) => {
-        if (isQueryReadOnly(query)) {
-          return stub.raw(query, ...bindings);
-        }
-        return { rowsRead: 0, rowsWritten: 0, raw: [], columnNames: [] };
-      },
-      { dangerouslyDisableAuth: true }
-    );
+    // Decrypt access token to get user_id
+    try {
+      if (!accessToken.startsWith("simple_")) {
+        throw new Error("Invalid access token format");
+      }
+
+      const encryptedData = accessToken.substring(7);
+      const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
+      const [userId] = decryptedData.split(":");
+
+      const userDO = getMultiStub(
+        env.UserDO,
+        [{ name: `user:${userId}` }, { name: "aggregate" }],
+        ctx
+      );
+      const userData = await userDO.getUser();
+      if (userData?.user?.username !== env.ADMIN_X_USERNAME) {
+        return new Response("Only admin can view DB", { status: 401 });
+      }
+
+      const stub = getMultiStub(env.UserDO, [{ name: `aggregate` }], ctx);
+      return studioMiddleware(
+        request,
+        async (query: string, ...bindings: any[]) => {
+          if (isQueryReadOnly(query)) {
+            return stub.raw(query, ...bindings);
+          }
+          return { rowsRead: 0, rowsWritten: 0, raw: [], columnNames: [] };
+        },
+        { dangerouslyDisableAuth: true }
+      );
+    } catch (error) {
+      return new Response("Invalid access token", { status: 401 });
+    }
   }
 
   // MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)
@@ -390,7 +508,7 @@ tag = "v1"
   }
 
   if (path === "/token") {
-    return handleToken(request, env, scope);
+    return handleToken(request, env, ctx, scope);
   }
 
   if (path === "/authorize") {
@@ -472,15 +590,23 @@ async function handleMe(
   }
 
   try {
-    // Get user data from Durable Object
+    // Decrypt access token to get user_id
+    if (!accessToken.startsWith("simple_")) {
+      throw new Error("Invalid access token format");
+    }
 
+    const encryptedData = accessToken.substring(7);
+    const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
+    const [userId] = decryptedData.split(":");
+
+    // Get user data from Durable Object using user_id
     const userDO = getMultiStub(
       env.UserDO,
-      [{ name: `user:${accessToken}` }, { name: "aggregate" }],
+      [{ name: `user:${userId}` }, { name: "aggregate" }],
       ctx
     );
 
-    const userData = await userDO.getUser();
+    const userData = await userDO.getUserByAccessToken(accessToken);
 
     if (!userData) {
       return new Response(
@@ -609,15 +735,28 @@ async function handleAuthorize(
   // Check if user is already authenticated
   const accessToken = getAccessToken(request);
   if (accessToken) {
-    // User is already authenticated, create auth code and redirect
-    return await createAuthCodeAndRedirect(
-      env,
-      clientId,
-      redirectUri,
-      state,
-      accessToken,
-      resource
-    );
+    try {
+      // Decrypt access token to get user_id
+      if (!accessToken.startsWith("simple_")) {
+        throw new Error("Invalid access token format");
+      }
+
+      const encryptedData = accessToken.substring(7);
+      const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
+      const [userId] = decryptedData.split(":");
+
+      // User is already authenticated, create auth code and redirect
+      return await createAuthCodeAndRedirect(
+        env,
+        clientId,
+        redirectUri,
+        state,
+        userId,
+        resource
+      );
+    } catch (error) {
+      // Invalid token, continue to X OAuth
+    }
   }
 
   // User not authenticated, redirect to X OAuth with our callback
@@ -676,22 +815,27 @@ async function createAuthCodeAndRedirect(
   clientId: string,
   redirectUri: string,
   state: string | null,
-  encryptedAccessToken: string,
+  userId: string,
   resource?: string
 ): Promise<Response> {
   // Generate auth code
   const authCode = generateCodeVerifier(); // Reuse the same random generation
 
-  // Decrypt to get X access token
-  const xAccessToken = await decrypt(encryptedAccessToken, env.X_CLIENT_SECRET);
+  // Get user's X access token from user DO
+  const userDO = env.UserDO.get(env.UserDO.idFromName(`user:${userId}`));
+  const userData = await userDO.getUser();
+
+  if (!userData) {
+    throw new Error("User not found");
+  }
 
   // Create Durable Object for this auth code with "code:" prefix
   const id = env.UserDO.idFromName(`code:${authCode}`);
   const authCodeDO = env.UserDO.get(id);
 
   await authCodeDO.setAuthData(
-    xAccessToken,
-    encryptedAccessToken,
+    userData.xAccessToken,
+    userId, // Store user_id instead of encrypted access token
     clientId,
     redirectUri,
     resource // MCP: Store resource parameter
@@ -713,6 +857,7 @@ async function createAuthCodeAndRedirect(
 async function handleToken(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   scope: string
 ): Promise<Response> {
   // Handle preflight OPTIONS request
@@ -804,10 +949,21 @@ async function handleToken(
     });
   }
 
-  // Return the encrypted access token
+  // Get user DO and create login for this client
+  const userId = authData.access_token; // This is now the user_id
+  const userDO = getMultiStub(
+    env.UserDO,
+    [{ name: `user:${userId}` }, { name: "aggregate" }],
+    ctx
+  );
+
+  // Create new access token for this client
+  const accessToken = await userDO.createLogin(userId, clientId.toString());
+
+  // Return the new access token
   return new Response(
     JSON.stringify({
-      access_token: authData.access_token,
+      access_token: accessToken,
       token_type: "bearer",
       scope,
     }),
@@ -898,18 +1054,14 @@ async function handleCallback(
     "_normal",
     "_400x400"
   );
-  // Encrypt the X access token
-  const encryptedAccessToken = await encrypt(
-    tokenData.access_token,
-    env.X_CLIENT_SECRET
-  );
 
+  // Store user in their DO
   const userDO = getMultiStub(
     env.UserDO,
-    [{ name: `user:${encryptedAccessToken}` }, { name: "aggregate" }],
+    [{ name: `user:${user.id}` }, { name: "aggregate" }],
     ctx
   );
-  await userDO.setUser(user, tokenData.access_token, encryptedAccessToken);
+  await userDO.setUser(user, tokenData.access_token);
 
   // Check if this was part of an OAuth provider flow
   if (providerStateCookie) {
@@ -922,8 +1074,14 @@ async function handleCallback(
         providerState.clientId,
         providerState.redirectUri,
         providerState.state,
-        encryptedAccessToken,
+        user.id, // Use user.id instead of encrypted access token
         providerState.resource // MCP: Pass through resource parameter
+      );
+
+      // Create access token for this client for cookie-based access
+      const accessToken = await userDO.createLogin(
+        providerState.clientId,
+        providerState.clientId
       );
 
       // Set access token cookie and clear state cookies
@@ -938,7 +1096,7 @@ async function handleCallback(
       );
       headers.append(
         "Set-Cookie",
-        `access_token=${encryptedAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
+        `access_token=${accessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
       );
 
       return new Response(response.body, { status: response.status, headers });
@@ -947,7 +1105,9 @@ async function handleCallback(
     }
   }
 
-  // Normal redirect (direct login)
+  // Normal redirect (direct login) - create access token for browser client
+  const browserAccessToken = await userDO.createLogin(user.id, "browser");
+
   const headers = new Headers({ Location: state.redirectTo || "/" });
   headers.append(
     "Set-Cookie",
@@ -955,7 +1115,7 @@ async function handleCallback(
   );
   headers.append(
     "Set-Cookie",
-    `access_token=${encryptedAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
+    `access_token=${browserAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
@@ -1184,13 +1344,25 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     const accessToken = getAccessToken(request);
     if (accessToken) {
       try {
-        // Get user data from Durable Object
+        // Decrypt access token to get user_id
+        if (!accessToken.startsWith("simple_")) {
+          throw new Error("Invalid access token format");
+        }
+
+        const encryptedData = accessToken.substring(7);
+        const decryptedData = await decrypt(
+          encryptedData,
+          env.ENCRYPTION_SECRET
+        );
+        const [userId] = decryptedData.split(":");
+
+        // Get user data from Durable Object using user_id
         userDO = getMultiStub(
           env.UserDO,
-          [{ name: `user:${accessToken}` }, { name: "aggregate" }],
+          [{ name: `user:${userId}` }, { name: "aggregate" }],
           ctx
         );
-        const userData = await userDO.getUser();
+        const userData = await userDO.getUserByAccessToken(accessToken);
 
         if (userData) {
           user = userData.user as unknown as XUser;
