@@ -20,23 +20,7 @@ This X OAuth Provider uses the client's domain name as the client_id and automat
 
 ## Simplest Setup: Hosted
 
-You can use this client by 'Wilmake Systems', that is hosted at https://login.wilmake.com, with very easy set-up.
-
-See [simplerauth-client](../simplerauth-client) how to use it in your apps.
-
-This is how the OAuth flow looks when using the hosted setup:
-
-![](hosted-wilmake.png)
-
-Please note that the hosted provider is fully permissive for the `profile` scope. If a user gave any app access to their profile information, any other app can also get this information. **This is by design**.
-
-When not to choose hosted:
-
-- If you don't want other apps to be authorized to get profile information of users that logged into your app(s)
-- If you want to retrieve the real X Access token with custom scopes
-- If you want full control over the X OAuth client (with icon and user connected to it)
-
-In these cases, a better choice is the internal, or easier, central setup, which allows you to configure exactly which clients get access to this.
+The Simple Hosted Setup is explained in the root [readme](../README.md)
 
 ## Setup: Internal and Central
 
