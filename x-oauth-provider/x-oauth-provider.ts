@@ -61,6 +61,8 @@ export class UserDO extends DurableObject {
         x_access_token TEXT NOT NULL,
         created_at INTEGER DEFAULT (unixepoch()),
         updated_at INTEGER DEFAULT (unixepoch()),
+        last_active_at INTEGER DEFAULT (unixepoch()),
+        session_count INTEGER DEFAULT 1,
         additional_data TEXT DEFAULT '{}'
       )
     `);
@@ -72,9 +74,41 @@ export class UserDO extends DurableObject {
         user_id TEXT NOT NULL,
         client_id TEXT NOT NULL,
         created_at INTEGER DEFAULT (unixepoch()),
+        last_active_at INTEGER DEFAULT (unixepoch()),
+        session_count INTEGER DEFAULT 1,
         FOREIGN KEY (user_id) REFERENCES users (user_id)
       )
     `);
+
+    // Add columns to existing tables if they don't exist
+    try {
+      this.sql.exec(
+        `ALTER TABLE users ADD COLUMN last_active_at INTEGER DEFAULT (unixepoch())`
+      );
+    } catch (e) {
+      // Column already exists
+    }
+    try {
+      this.sql.exec(
+        `ALTER TABLE users ADD COLUMN session_count INTEGER DEFAULT 1`
+      );
+    } catch (e) {
+      // Column already exists
+    }
+    try {
+      this.sql.exec(
+        `ALTER TABLE logins ADD COLUMN last_active_at INTEGER DEFAULT (unixepoch())`
+      );
+    } catch (e) {
+      // Column already exists
+    }
+    try {
+      this.sql.exec(
+        `ALTER TABLE logins ADD COLUMN session_count INTEGER DEFAULT 1`
+      );
+    } catch (e) {
+      // Column already exists
+    }
 
     // Set alarm for 10 minutes from now
     this.storage.setAlarm(Date.now() + 10 * 60 * 1000);
@@ -131,11 +165,11 @@ export class UserDO extends DurableObject {
       ...additionalData
     } = user;
 
-    // Store user in SQLite
+    // Store user in SQLite with last_active_at set to now
     this.sql.exec(
       `INSERT OR REPLACE INTO users 
-       (user_id, name, username, profile_image_url, verified, x_access_token, updated_at, additional_data)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (user_id, name, username, profile_image_url, verified, x_access_token, updated_at, last_active_at, session_count, additional_data)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT session_count FROM users WHERE user_id = ?), 1), ?)`,
       id,
       name,
       username,
@@ -143,6 +177,8 @@ export class UserDO extends DurableObject {
       verified || false,
       xAccessToken,
       now,
+      now,
+      id, // for COALESCE subquery
       JSON.stringify(additionalData)
     );
   }
@@ -164,16 +200,87 @@ export class UserDO extends DurableObject {
     const encryptedData = await encrypt(tokenData, this.env.ENCRYPTION_SECRET);
     const accessToken = `simple_${encryptedData}`;
 
-    // Store login
+    const now = Math.floor(Date.now() / 1000);
+
+    // Store login with last_active_at set to now
     this.sql.exec(
-      `INSERT OR REPLACE INTO logins (access_token, user_id, client_id)
-       VALUES (?, ?, ?)`,
+      `INSERT OR REPLACE INTO logins (access_token, user_id, client_id, last_active_at, session_count)
+       VALUES (?, ?, ?, ?, COALESCE((SELECT session_count FROM logins WHERE access_token = ?), 1))`,
       accessToken,
       userId,
-      clientId
+      clientId,
+      now,
+      accessToken // for COALESCE subquery
     );
 
     return accessToken;
+  }
+
+  async updateActivity(accessToken: string): Promise<void> {
+    const now = Math.floor(Date.now() / 1000);
+    const oneHourAgo = now - 3600; // 1 hour in seconds
+    const fourHoursAgo = now - 14400; // 4 hours in seconds
+
+    // Get current last_active_at for both login and user
+    const loginResult = this.sql
+      .exec(
+        `SELECT user_id, last_active_at FROM logins WHERE access_token = ?`,
+        accessToken
+      )
+      .toArray()[0];
+
+    if (!loginResult) {
+      return;
+    }
+
+    const userId = loginResult.user_id as string;
+    const loginLastActive = loginResult.last_active_at as number;
+
+    const userResult = this.sql
+      .exec(`SELECT last_active_at FROM users WHERE user_id = ?`, userId)
+      .toArray()[0];
+
+    if (!userResult) {
+      return;
+    }
+
+    const userLastActive = userResult.last_active_at as number;
+
+    // Update login activity
+    if (loginLastActive < fourHoursAgo) {
+      // More than 4 hours old - increment session_count and update last_active_at
+      this.sql.exec(
+        `UPDATE logins SET last_active_at = ?, session_count = session_count + 1 WHERE access_token = ?`,
+        now,
+        accessToken
+      );
+    } else if (loginLastActive < oneHourAgo) {
+      // Between 1-4 hours old - only update last_active_at
+      this.sql.exec(
+        `UPDATE logins SET last_active_at = ? WHERE access_token = ?`,
+        now,
+        accessToken
+      );
+    }
+    // Less than 1 hour old - no update needed
+
+    // Update user activity
+    if (userLastActive < fourHoursAgo) {
+      // More than 4 hours old - increment session_count and update last_active_at
+      this.sql.exec(
+        `UPDATE users SET last_active_at = ?, session_count = session_count + 1 WHERE user_id = ?`,
+        now,
+        userId
+      );
+    } else if (userLastActive < oneHourAgo) {
+      // Between 1-4 hours old - only update last_active_at
+      this.sql.exec(
+        `UPDATE users SET last_active_at = ? WHERE user_id = ?`,
+        now,
+        userId
+      );
+    }
+    // Less than 1 hour old - no update needed
   }
 
   async getUser(): Promise<{
@@ -608,6 +715,9 @@ async function handleMe(
       [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
       ctx
     );
+
+    // Update activity before getting user data
+    await userDO.updateActivity(accessToken);
 
     const userData = await userDO.getUserByAccessToken(accessToken);
 
@@ -1056,7 +1166,7 @@ async function handleCallback(
     "_400x400"
   );
 
-  // Store user in their DO
+  // Store user in their DO - this will set last_active_at to now
   const userDO = getMultiStub(
     env.UserDO,
     [{ name: `${USER_DO_PREFIX}${user.id}` }, { name: "aggregate" }],
@@ -1081,7 +1191,7 @@ async function handleCallback(
 
       // Create access token for this client for cookie-based access
       const accessToken = await userDO.createLogin(
-        providerState.clientId,
+        user.id,
         providerState.clientId
       );
 
@@ -1366,6 +1476,13 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
           [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
           ctx
         );
+
+        // Update activity before getting user data (except for /me endpoint which handles it separately)
+        const url = new URL(request.url);
+        if (url.pathname !== "/me") {
+          await userDO.updateActivity(accessToken);
+        }
+
         const userData = await userDO.getUserByAccessToken(accessToken);
 
         if (userData) {
