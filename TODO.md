@@ -1,28 +1,37 @@
-# This weekend (or monday)
+AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled.
+
+# provider
 
 - ✅ Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
-- ❗️ Ensure the access-token encodes the `user_id` as well as the `client_id` (needs new table `logins`): now, each client has a different access token for each user.
-- 🟠 Add configuration `allowedClients` to restrict which clients can authorize.
-- Change registered scopes in `simplerauth-client` to just `profile` (standard)
-- Keep track of created at, updated at, and request_count in logins!!! Super valueable stats
+- 🤔 Figure out if we should require a unique access_token per client-id (since we may wanna reuse it directly for api calls, it makes sense)
+- ❗️ Ensure the access-token encodes the `user_id` as well as the `client_id` (needs new table `logins`): now, each client has a different access tokens for each user, and there can be as many as required.
 - use user_id for DO name
 - don't use `aggregate` for read-only queries
+- Every new login would create a new unique login! To not overwrite other devices.
+- Keep track of created at, updated at, and request_count in logins!!! Super valueable stats
+- 🟠 Add configuration `allowedClients` to restrict which clients can authorize.
 - Make admin truly read-only
-- Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
+- Expose `/query` and MCP for that
 
-- Lay out the concept of `domain-as-client-id` and explain MCP-recommended programmatic oauth flow. This is also great to share on X and with the team.
-- Change to use this provider in `markdownfeed`, `universal-oauth-provider`, and `basedpeople` (and from now on, everywhere)
-- Test markdownfeed MCP with https://universal.simplerauth.com
-- Figure out if we should require a unique access_token per client-id (since we may wanna reuse it directly for api calls, it makes sense)
+# Client
+
+- Change registered scopes in `simplerauth-client` to just `profile` (standard)
+- Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
 - Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`.
 - Add it to `system[-ts].md`
 
-AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled.
+# Content
 
-Bonus:
+- Lay out the concept of `domain-as-client-id` and explain MCP-recommended programmatic oauth flow. This is also great to share on X and with the team.
 
-- Having a way to track which users are logged in with which client_id's and when/where/how often they're active
-- When logged in, connect durable-worker with user-DO
+# Apply it
+
+- Change to use this provider in `markdownfeed`, `universal-oauth-provider`, and `basedpeople` (and from now on, everywhere)
+- Test markdownfeed MCP with https://universal.simplerauth.com
+
+# Bonus
+
+- Flaredream: When logged in, connect durable-worker with user-DO.
 - Stripeflare must take user-ID and must be able to have metadata for payment callback with custom logic per metadata. May need different boundary.
 
 Meeting Mv:
