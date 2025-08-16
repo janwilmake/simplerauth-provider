@@ -8,6 +8,8 @@ import {
   studioMiddleware,
 } from "queryable-object";
 
+const USER_DO_PREFIX = "user-v2:";
+
 export interface Env {
   SELF_CLIENT_ID: string;
   X_CLIENT_ID: string;
@@ -353,7 +355,7 @@ tag = "v1"
 
       const userDO = getMultiStub(
         env.UserDO,
-        [{ name: `user:${userId}` }, { name: "aggregate" }],
+        [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
         ctx
       );
       const userData = await userDO.getUser();
@@ -603,7 +605,7 @@ async function handleMe(
     // Get user data from Durable Object using user_id
     const userDO = getMultiStub(
       env.UserDO,
-      [{ name: `user:${userId}` }, { name: "aggregate" }],
+      [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
       ctx
     );
 
@@ -823,7 +825,9 @@ async function createAuthCodeAndRedirect(
   const authCode = generateCodeVerifier(); // Reuse the same random generation
 
   // Get user's X access token from user DO
-  const userDO = env.UserDO.get(env.UserDO.idFromName(`user:${userId}`));
+  const userDO = env.UserDO.get(
+    env.UserDO.idFromName(`${USER_DO_PREFIX}${userId}`)
+  );
   const userData = await userDO.getUser();
 
   if (!userData) {
@@ -954,7 +958,7 @@ async function handleToken(
   const userId = authData.access_token; // This is now the user_id
   const userDO = getMultiStub(
     env.UserDO,
-    [{ name: `user:${userId}` }, { name: "aggregate" }],
+    [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
     ctx
   );
 
@@ -1055,7 +1059,7 @@ async function handleCallback(
   // Store user in their DO
   const userDO = getMultiStub(
     env.UserDO,
-    [{ name: `user:${user.id}` }, { name: "aggregate" }],
+    [{ name: `${USER_DO_PREFIX}${user.id}` }, { name: "aggregate" }],
     ctx
   );
   await userDO.setUser(user, tokenData.access_token);
@@ -1359,7 +1363,7 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
         // Get user data from Durable Object using user_id
         userDO = getMultiStub(
           env.UserDO,
-          [{ name: `user:${userId}` }, { name: "aggregate" }],
+          [{ name: `${USER_DO_PREFIX}${userId}` }, { name: "aggregate" }],
           ctx
         );
         const userData = await userDO.getUserByAccessToken(accessToken);
