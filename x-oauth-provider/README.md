@@ -14,9 +14,9 @@ This X OAuth Provider uses the client's domain name as the client_id and automat
 
 **3 ways to use it**
 
-1. **Internal** - Use directly in your cloudflare worker
-2. **Central** - Host as a separate worker and use as a central "OAuth Hub" for all your x-oauthed apps
-3. **Hosted** - Use directly from https://login.wilmake.com
+1. **Hosted** - Use directly from https://login.wilmake.com
+2. **Internal** - Use directly in your cloudflare worker
+3. **Central** - Host as a separate worker and use as a central "OAuth Hub" for all your x-oauthed apps
 
 ## Simplest Setup: Hosted
 
@@ -75,33 +75,6 @@ export default {
     },
     { isLoginRequired: true }
   ),
-};
-```
-
-### Manual Authentication Flow
-
-```typescript path="src/manual.ts"
-import { UserDO, handleOAuth, getAccessToken } from "x-oauth-provider";
-export { UserDO };
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    // Handle OAuth routes
-    const oauthResponse = await handleOAuth(request, env);
-    if (oauthResponse) return oauthResponse;
-
-    // Check if user is authenticated
-    const accessToken = getAccessToken(request);
-    if (!accessToken) {
-      // Redirect to login
-      return Response.redirect(
-        "/authorize?redirect_to=" + encodeURIComponent(request.url)
-      );
-    }
-
-    // Your app logic here
-    return new Response("Hello, authenticated user!");
-  },
 };
 ```
 
@@ -191,24 +164,6 @@ Your OAuth provider exposes these endpoints:
 - **Token Expiration**: Authorization codes expire after 10 minutes
 - **Secure Storage**: User data encrypted in Durable Objects
 - **PKCE Support**: Proof Key for Code Exchange for enhanced security
-
-## Configuration Options
-
-### `withSimplerAuth` Options
-
-```typescript
-withSimplerAuth(handler, {
-  isLoginRequired: true, // Force authentication
-  scope: "users.read tweet.read offline.access", // X API scopes
-  sameSite: "Lax", // Cookie SameSite policy
-});
-```
-
-### `handleOAuth` Options
-
-```typescript
-handleOAuth(request, env, scope, sameSite);
-```
 
 ## MCP Compliance
 
