@@ -1,5 +1,13 @@
 POC of a client that uses the `x-oauth-provider`, then also, in turn, makes itself a provider. Go to https://client.simplerauth.com to see this in practice.
 
+# Why
+
+- X Free or Basic just allows creating a single client
+- A single client can have up to just 10 callback URLs, which limits you in how many apps you can create
+- To bypass this problem, you can use the `simplerauth-client` to create unlimited X Authed Apps (even without a client)
+
+# Features
+
 - **Simpler** - literally wrap your fetch handler with `withSimplerAuth(handler,config)` and you'll have access to `ctx.user`.
 - **Secretless** - no secrets needed due to the 'hostname as client-id' principle.
 - **Stateless** - no state needed since every user gets their own tiny DB in the provider, yielding super high performance
