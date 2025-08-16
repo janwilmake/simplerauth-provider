@@ -1,8 +1,8 @@
 # X OAuth Provider
 
-[![janwilmake/x-oauth-client-provider context](https://badge.forgithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md)](https://uithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md) [![](https://b.lmpify.com)](https://letmeprompt.com?q=https://uithub.com/janwilmake/x-oauth-client-provider/tree/main/README.md)
+[![janwilmake/x-oauth-provider context](https://badge.forgithub.com/janwilmake/x-oauth-provider/tree/main/README.md)](https://uithub.com/janwilmake/x-oauth-provider/tree/main/README.md) [![](https://b.lmpify.com)](https://letmeprompt.com?q=https://uithub.com/janwilmake/x-oauth-provider/tree/main/README.md)
 
-This X OAuth client-provider uses the client's domain name as the client_id and automatically derives the `redirect_uri` from it (e.g., `https://example.com/callback`), eliminating the need for client registration while maintaining security through domain validation.
+This X OAuth Provider uses the client's domain name as the client_id and automatically derives it from the `redirect_uri` (e.g., `https://example.com/callback` means `client_id` must equal `example.com`), eliminating the need for client registration while maintaining security through domain validation.
 
 **Key Features:**
 
@@ -22,7 +22,7 @@ This X OAuth client-provider uses the client's domain name as the client_id and 
 
 You can use this client by 'Wilmake Systems', that is hosted at https://login.wilmake.com, with very easy set-up.
 
-See [simplerauth-client](simplerauth-client) how to use it in your apps.
+See [simplerauth-client](../simplerauth-client) how to use it in your apps.
 
 This is how the OAuth flow looks when using the hosted setup:
 
@@ -43,7 +43,7 @@ In these cases, a better choice is the internal, or easier, central setup, which
 1. Installation:
 
 ```bash
-npm i x-oauth-client-provider
+npm i x-oauth-provider
 ```
 
 2. Set environment variables:
@@ -69,7 +69,7 @@ tag = "v1"
 ### Simple Enforced Authentication
 
 ```typescript path="src/index.ts"
-import { UserDO, withSimplerAuth } from "x-oauth-client-provider";
+import { UserDO, withSimplerAuth } from "x-oauth-provider";
 export { UserDO };
 
 export default {
@@ -97,7 +97,7 @@ export default {
 ### Manual Authentication Flow
 
 ```typescript path="src/manual.ts"
-import { UserDO, handleOAuth, getAccessToken } from "x-oauth-client-provider";
+import { UserDO, handleOAuth, getAccessToken } from "x-oauth-provider";
 export { UserDO };
 
 export default {

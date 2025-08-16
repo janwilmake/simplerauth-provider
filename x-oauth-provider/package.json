@@ -1,10 +1,10 @@
 {
-  "name": "x-oauth-client-provider",
-  "version": "0.0.13",
+  "name": "x-oauth-provider",
+  "version": "0.0.15",
   "files": [
-    "x-oauth-client-provider.ts"
+    "x-oauth-provider.ts"
   ],
-  "main": "x-oauth-client-provider.ts",
+  "main": "x-oauth-provider.ts",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250813.0"
   },
