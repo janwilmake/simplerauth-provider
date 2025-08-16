@@ -33,9 +33,11 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
   - access*token format is of format simple*{encrypted_data} where the decrypted is in format `user_id:client_id:token` to keep it short. encrypted with env.X_CLIENT_SECRET. Now, each client has a different access tokens for each user, and there can be as many as required.
   - For all DO functions that affect either the logins or users table, use `user:${user_id}` for DO name. we can decrypt the access token to know the user_id
   - no backwards compatibility required
+- ✅ Every new login would create a new unique login! To not overwrite other devices.
 - Don't hit `aggregate` for read-only queries
-- Every new login would create a new unique login! To not overwrite other devices.
-- Keep track of created at, updated at, and request_count in logins!!! Super valueable stats
+- ✅ Keep track of created at, updated at, and request_count in logins!!! Super valueable stats. The logic should be as follows:
+  - upon /callback, set last_active_at.
+  - when calling /me, if last_active_at is more than an hour old but less than 4 hours old, only update last_active_at. if last_active_at is more than 4 hours old, increment session_count (there was inactivity for >3 hours)
 - 🟠 Add configuration `allowedClients` to restrict which clients can authorize.
 - For admin, also expose `/query` and MCP for that
 - Also expose `llms.txt` and `openapi.json` for the provider.
