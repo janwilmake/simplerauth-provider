@@ -2,11 +2,12 @@
 
 - ✅ Need `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
 - ❗️ Ensure the access-token encodes the `user_id` as well as the `client_id` (needs new table `logins`): now, each client has a different access token for each user.
+- 🟠 Add configuration `allowedClients` to restrict which clients can authorize.
 - Change registered scopes in `simplerauth-client` to just `profile` (standard)
 - Keep track of created at, updated at, and request_count in logins!!! Super valueable stats
 - use user_id for DO name
-- don't use aggregate for read-only queries
-- Make admin truly read only
+- don't use `aggregate` for read-only queries
+- Make admin truly read-only
 - Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
 
 - Lay out the concept of `domain-as-client-id` and explain MCP-recommended programmatic oauth flow. This is also great to share on X and with the team.

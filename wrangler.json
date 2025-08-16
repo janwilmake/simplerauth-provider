@@ -13,7 +13,7 @@
       "pattern": "login.wilmake.com"
     }
   ],
-  "main": "decorator-demo.ts",
+  "main": "main.ts",
   "assets": {
     "directory": "./public"
   },

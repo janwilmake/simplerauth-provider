@@ -1147,6 +1147,8 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     scope?: string;
     /** Defaults to 'Lax' meaning subdomains are also valid to use the cookies */
     sameSite?: "Strict" | "Lax";
+    /** If provided, only clients with these hostnames will be able to use this service to retrieve profile information. If not provided, any client will be able to */
+    allowedClients?: string[];
   }
 ): ExportedHandlerFetchHandler<Env & TEnv> {
   const { scope, sameSite } = config || {};
