@@ -761,10 +761,7 @@ async function handleMe(
         error: "server_error",
         error_description: "Internal server error",
       }),
-      {
-        status: 500,
-        headers,
-      }
+      { status: 500, headers }
     );
   }
 }
@@ -1049,10 +1046,16 @@ async function handleToken(
   const authData = await authCodeDO.getAuthData();
 
   if (!authData) {
-    return new Response(JSON.stringify({ error: "invalid_grant" }), {
-      status: 400,
-      headers,
-    });
+    return new Response(
+      JSON.stringify({
+        error: "invalid_grant",
+        message: "Auth data not found",
+      }),
+      {
+        status: 400,
+        headers,
+      }
+    );
   }
 
   // Validate client_id and redirect_uri match
@@ -1060,18 +1063,24 @@ async function handleToken(
     authData.clientId !== clientId ||
     (redirectUri && authData.redirectUri !== redirectUri)
   ) {
-    return new Response(JSON.stringify({ error: "invalid_grant" }), {
-      status: 400,
-      headers,
-    });
+    return new Response(
+      JSON.stringify({
+        error: "invalid_grant",
+        message: "Invalid client_id or redirect_uri",
+      }),
+      {
+        status: 400,
+        headers,
+      }
+    );
   }
 
   // MCP Required: Validate resource parameter matches if provided
   if (resource && authData.resource !== resource) {
-    return new Response(JSON.stringify({ error: "invalid_grant" }), {
-      status: 400,
-      headers,
-    });
+    return new Response(
+      JSON.stringify({ error: "invalid_grant", message: "Invalid resource" }),
+      { status: 400, headers }
+    );
   }
 
   // Get user DO and create login for this client

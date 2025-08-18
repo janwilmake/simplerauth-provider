@@ -280,7 +280,7 @@ async function handleCallback(
 
   // Get redirect_uri and redirect_to from cookies
   const redirectUri = cookies.redirect_uri || `${url.origin}/callback`;
-  const redirectTo = cookies.redirect_to || state || "/";
+  const redirectTo = cookies.redirect_to || "/";
 
   try {
     const params = {
