@@ -20,7 +20,7 @@ You can use this client by 'Wilmake Systems', that is hosted at https://login.wi
 
 This is how the OAuth flow looks when using the hosted setup:
 
-![](hosted-wilmake.png)
+![](hosted3.png)
 
 Please note that the hosted provider is fully permissive for the `profile` scope. If a user gave any app access to their profile information, any other app can also get this information. **This is by design**.
 
