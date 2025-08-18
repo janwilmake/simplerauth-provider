@@ -36,23 +36,24 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 - ✅ Client needs `withSimplerAuth` implementation that uses arbitrary address for token exchange, not X.
 - ✅ Change registered scopes in `simplerauth-client` to just `profile` (standard)
 
-# TODO
-
-AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled (flaredream).
+# 2025-08-18
 
 - ✅ Change to use `simplerauth-client` in `universal-oauth-provider`
 - ✅ Improve `simplerauth-client` so localhost development 'just works' (But is this secure to open up?) `Invalid client_id: must be a valid domain`. For localhost, getting invalid grant. Test `basedpeople` locally.
   - ✅ Added check to `env.PORT` and header check to see if ip is localhost loopback ip
   - ✅ Fixed client to set temporary cookies for redirect_uri and redirect_to to ensure we can send them to the token endpoint
 - 🤔 Specifically for basedpeople, doing a request to `ctx.user` every time makes this worker twice as expensive. Kinda wasteful, but is that important? Maybe, a cache to `/me` can be made configurable? Seems exessive to fetch it every time **Skip for now since this also tracks the user, which is something we want**
-- Change in `markdownfeed` and test markdownfeed MCP with https://universal.simplerauth.com. Update `simplerauth-client` such that the 401 config is perfect and flow is 100% compatible!
-- Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
-- Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`. More work required to allow for packages (can hardcode speicific single-file ones maybe, at first, to skip bundling still)
-- Add it to `system[-ts].md`. Can even be without being a module for now, just package and proper buildscript and main entry should be configured.
-- Add configuration `allowedClients` to restrict which clients can authorize.
-- ✅ Create `@wilmakesystems` account with more subtle profile picture, and align the logo with that, so login comes over more trustworthy.
+- ✅ Create `@wilmakesystems` account with more subtle profile picture, and align the logo with that, so login comes over more trustworthy. **Actually it wasn't needed since it doesn't change anything, but it's good to have a separate account for login so it won't get banned easily. I can now get 'basic' on janwilmake and experiment on that account while keeping this stable**
 
-When all is well, do an announcement for the `simplerauth-client`.
+# TODO
+
+AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled (flaredream).
+
+- If it's easy enough, change to use this login in `markdownfeed` and test markdownfeed MCP with https://mcp.p0web.com.
+- Add configuration `allowedClients` to restrict which clients can authorize.
+- Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
+
+When all is well, do an announcement for the `simplerauth-client`
 
 ## Scalability
 
@@ -69,6 +70,8 @@ When all is well, do an announcement for the `simplerauth-client`.
 
 ## Bonus
 
+- Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`. More work required to allow for packages (can hardcode speicific single-file ones maybe, at first, to skip bundling still)
+- Add it to `system[-ts].md`. Can even be without being a module for now, just package and proper buildscript and main entry should be configured.
 - Flaredream: When logged in, connect durable-worker with user-DO.
 - Stripeflare must take user-ID and must be able to have metadata for payment callback with custom logic per metadata. May need different boundary.
 - For admin, also expose `/query` and MCP for that
@@ -76,4 +79,6 @@ When all is well, do an announcement for the `simplerauth-client`.
 
 ## Meeting Mv:
 
-- Make standalone POC OAuth with all MCP stuff?
+Find approval for one of these:
+
+- Option 1: Make standalone POC OAuth with all MCP stuff
