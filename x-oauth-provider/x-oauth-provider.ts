@@ -750,12 +750,7 @@ async function handleMe(
     }
 
     // Return user information
-    return new Response(
-      JSON.stringify({
-        data: userData.user,
-      }),
-      { headers }
-    );
+    return new Response(JSON.stringify(userData.user), { headers });
   } catch (error) {
     console.error("Error retrieving user data:", error);
     return new Response(
