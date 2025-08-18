@@ -26,7 +26,7 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 - ✅ Update datastructure
   - Create a new table `logins` that holds the access_token. Store x_access_token on the users, but access_token on the logins.
   - Ensure the access-token encodes and encrypts `user_id` as well as the `client_id` plus the x access token.
-  - access*token format is of format simple*{encrypted_data} where the decrypted is in format `user_id:client_id:token` to keep it short. encrypted with env.X_CLIENT_SECRET. Now, each client has a different access tokens for each user, and there can be as many as required.
+  - access*token format is of format `simple*{encrypted_data}` where the decrypted is in format`user_id:client_id:token`to keep it short. encrypted with `env.X_CLIENT_SECRET`. Now, each client has a different access tokens for each user, and there can be as many as required.
   - For all DO functions that affect either the logins or users table, use `user:${user_id}` for DO name. we can decrypt the access token to know the user_id
   - no backwards compatibility required
 - ✅ Every new login would create a new unique login! To not overwrite other devices.
@@ -77,8 +77,28 @@ When all is well, do an announcement for the `simplerauth-client`
 - For admin, also expose `/query` and MCP for that
 - Also expose `llms.txt` and `openapi.json` for the provider.
 
-## Meeting Mv:
+## Meeting Mv
+
+First probe enthousiasm to create 'login with parallel' functionality
 
 Find approval for one of these:
 
-- Option 1: Make standalone POC OAuth with all MCP stuff
+- Option 1: Demonstrate standalone POC OAuth with all MCP stuff
+- Option 2: Make parallel oauth provider that binds parallel API key to your X account, after which it's super easy to login into different recipes or tiny apps.
+
+## Parallel OAuth provider
+
+Just proxy through to login.wilmake.com to be logged in and let /token endpoint respond with the parallel api key instead
+
+Context - https://github.com/janwilmake/simplerauth-provider
+
+Makes no sense to wait for parallel oauth since it may take months; instead, use this first, and use it. Replace with their own oauth later.
+
+Discuss: require Github login or X login? their choice.
+
+## other modules flaredream
+
+- Stripeflare module
+- Toolflare module
+
+All in all this will allow super easy paid app creation, perfect to promote parallel
