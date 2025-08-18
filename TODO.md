@@ -42,10 +42,10 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
 
 - ✅ Change to use `simplerauth-client` in `universal-oauth-provider`
 - ✅ Improve `simplerauth-client` so localhost development 'just works' (But is this secure to open up?) `Invalid client_id: must be a valid domain`. For localhost, getting invalid grant. Test `basedpeople` locally.
-  - Added check to `env.PORT` and header check to see if ip is localhost loopback ip
-  - Fixed client to set headers for redirect_uri and redirect_to
+  - ✅ Added check to `env.PORT` and header check to see if ip is localhost loopback ip
+  - ✅ Fixed client to set temporary cookies for redirect_uri and redirect_to to ensure we can send them to the token endpoint
 - 🤔 Specifically for basedpeople, doing a request to `ctx.user` every time makes this worker twice as expensive. Kinda wasteful, but is that important? Maybe, a cache to `/me` can be made configurable? Seems exessive to fetch it every time
-- Change in `markdownfeed` and test markdownfeed MCP with https://universal.simplerauth.com. Update `simplerauth-client` such that the 401 config is perfect and flow is 100% compatible!!!
+- Change in `markdownfeed` and test markdownfeed MCP with https://universal.simplerauth.com. Update `simplerauth-client` such that the 401 config is perfect and flow is 100% compatible!
 - Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
 - Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`. More work required to allow for packages (can hardcode speicific single-file ones maybe, at first, to skip bundling still)
 - Add it to `system[-ts].md`. Can even be without being a module for now, just package and proper buildscript and main entry should be configured.
