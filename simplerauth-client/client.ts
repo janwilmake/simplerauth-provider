@@ -64,7 +64,7 @@ export function withSimplerAuth<TEnv = {}>(
     }
 
     if (path === "/authorize") {
-      return handleAuthorize(request, env, providerHostname, scope);
+      return handleAuthorize(request, env, providerHostname, scope, sameSite);
     }
 
     if (path === "/callback") {
@@ -187,22 +187,28 @@ function handleProtectedResourceMetadata(
   });
 }
 
-function handleAuthorize(
-  request: Request,
-  env: any,
-  providerHostname: string,
-  scope: string
-): Response {
+function isLocalhost(request: Request) {
   const url = new URL(request.url);
-  const isLocalhostURL =
+  return (
     url.hostname === "localhost" ||
     url.hostname === "127.0.0.1" ||
     // only at localhost!
     request.headers.get("cf-connecting-ip") === "::1" ||
-    request.headers.get("cf-connecting-ip") === "127.0.0.1";
+    request.headers.get("cf-connecting-ip") === "127.0.0.1"
+  );
+}
+
+function handleAuthorize(
+  request: Request,
+  env: any,
+  providerHostname: string,
+  scope: string,
+  sameSite: string
+): Response {
+  const url = new URL(request.url);
 
   const clientId =
-    url.searchParams.get("client_id") || isLocalhostURL
+    url.searchParams.get("client_id") || isLocalhost(request)
       ? "localhost"
       : url.hostname;
 
@@ -212,13 +218,11 @@ function handleAuthorize(
   // force https
   const redirectUri = url.searchParams.get("redirect_uri")
     ? url.searchParams.get("redirect_uri")
-    : isLocalhostURL
+    : isLocalhost(request)
     ? `http://localhost:${port}/callback`
     : `https://${url.host}/callback`;
 
   const state = url.searchParams.get("state");
-
-  // TODO: ensure this is used
   const redirectTo = url.searchParams.get("redirect_to") || "/";
 
   // Build provider authorization URL
@@ -234,9 +238,28 @@ function handleAuthorize(
   providerUrl.searchParams.set("resource", url.origin);
 
   const providerUrlString = providerUrl.toString();
+  console.log({ providerUrlString });
+
+  // Set cookies for redirect_uri and redirect_to
+  const securePart = isLocalhost(request) ? "" : "Secure; ";
+  const headers = new Headers();
+  headers.set("Location", providerUrlString);
+  headers.append(
+    "Set-Cookie",
+    `redirect_uri=${encodeURIComponent(
+      redirectUri
+    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=${sameSite}; Path=/`
+  );
+  headers.append(
+    "Set-Cookie",
+    `redirect_to=${encodeURIComponent(
+      redirectTo
+    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=${sameSite}; Path=/`
+  );
+
   return new Response(null, {
     status: 302,
-    headers: { Location: providerUrlString },
+    headers,
   });
 }
 
@@ -246,8 +269,7 @@ async function handleCallback(
   sameSite: string
 ): Promise<Response> {
   const url = new URL(request.url);
-  const isLocalhostURL =
-    url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  const cookies = parseCookies(request.headers.get("Cookie") || "");
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -256,20 +278,26 @@ async function handleCallback(
     return new Response("Missing authorization code", { status: 400 });
   }
 
+  // Get redirect_uri and redirect_to from cookies
+  const redirectUri = cookies.redirect_uri || `${url.origin}/callback`;
+  const redirectTo = cookies.redirect_to || state || "/";
+
   try {
+    const params = {
+      grant_type: "authorization_code",
+      code: code,
+      client_id: isLocalhost(request) ? "localhost" : url.hostname,
+      redirect_uri: redirectUri,
+      ...(state && { state }),
+    };
+    console.log({ params });
     // Exchange code for token with the provider
     const tokenResponse = await fetch(`https://${providerHostname}/token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code: code,
-        client_id: url.hostname,
-        redirect_uri: `${url.origin}/callback`,
-        ...(state && { state }),
-      }),
+      body: new URLSearchParams(params),
     });
 
     if (!tokenResponse.ok) {
@@ -286,16 +314,26 @@ async function handleCallback(
       return new Response("No access token received", { status: 400 });
     }
 
-    // Determine redirect URL
-    const redirectTo = url.searchParams.get("redirect_to") || state || "/";
-    const securePart = isLocalhostURL ? "" : "Secure; ";
-    // Set access token cookie and redirect
+    const securePart = isLocalhost(request) ? "" : "Secure; ";
+    // Set access token cookie and clear temporary cookies, then redirect
+    const headers = new Headers();
+    headers.set("Location", redirectTo);
+    headers.append(
+      "Set-Cookie",
+      `access_token=${tokenData.access_token}; HttpOnly; ${securePart}Max-Age=34560000; SameSite=${sameSite}; Path=/`
+    );
+    headers.append(
+      "Set-Cookie",
+      `redirect_uri=; HttpOnly; ${securePart}Max-Age=0; SameSite=${sameSite}; Path=/`
+    );
+    headers.append(
+      "Set-Cookie",
+      `redirect_to=; HttpOnly; ${securePart}Max-Age=0; SameSite=${sameSite}; Path=/`
+    );
+
     return new Response(null, {
       status: 302,
-      headers: {
-        Location: redirectTo,
-        "Set-Cookie": `access_token=${tokenData.access_token}; HttpOnly; ${securePart}Max-Age=34560000; SameSite=${sameSite}; Path=/`,
-      },
+      headers,
     });
   } catch (error) {
     console.error("Callback error:", error);
@@ -392,12 +430,13 @@ async function handleMe(
 function handleLogout(request: Request, sameSite: string): Response {
   const url = new URL(request.url);
   const redirectTo = url.searchParams.get("redirect_to") || "/";
+  const securePart = isLocalhost(request) ? "" : "Secure; ";
 
   return new Response(null, {
     status: 302,
     headers: {
       Location: redirectTo,
-      "Set-Cookie": `access_token=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`,
+      "Set-Cookie": `access_token=; HttpOnly; ${securePart}SameSite=${sameSite}; Max-Age=0; Path=/`,
     },
   });
 }
