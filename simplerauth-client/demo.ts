@@ -6,7 +6,7 @@ export default {
       if (ctx.authenticated) {
         return new Response(`Hello ${ctx.user.name}! You are logged in.`);
       } else {
-        return new Response("Hello anonymous user!");
+        return new Response("Hello, anonymous user!");
       }
     },
     {

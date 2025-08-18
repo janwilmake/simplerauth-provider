@@ -64,7 +64,7 @@ export function withSimplerAuth<TEnv = {}>(
     }
 
     if (path === "/authorize") {
-      return handleAuthorize(request, providerHostname, scope);
+      return handleAuthorize(request, env, providerHostname, scope);
     }
 
     if (path === "/callback") {
@@ -92,9 +92,7 @@ export function withSimplerAuth<TEnv = {}>(
       try {
         // Verify token with provider and get user info
         const userResponse = await fetch(`https://${providerHostname}/me`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
+          headers: { Authorization: `Bearer ${accessToken}` },
         });
 
         if (userResponse.ok) {
@@ -110,9 +108,9 @@ export function withSimplerAuth<TEnv = {}>(
     // Check if authentication is required
     if (isLoginRequired && !authenticated) {
       const isBrowser = request.headers.get("accept")?.includes("text/html");
-      const loginUrl = `${
-        url.origin
-      }/authorize?redirect_to=${encodeURIComponent(url.toString())}`;
+      const loginUrl = `/authorize?redirect_to=${encodeURIComponent(
+        url.pathname + url.search
+      )}`;
       const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
 
       return new Response(
@@ -132,6 +130,7 @@ export function withSimplerAuth<TEnv = {}>(
 
     // Create enhanced context
     const enhancedCtx: UserContext = {
+      props: ctx.props,
       passThroughOnException: () => ctx.passThroughOnException(),
       waitUntil: (promise: Promise<any>) => ctx.waitUntil(promise),
       user,
@@ -190,14 +189,36 @@ function handleProtectedResourceMetadata(
 
 function handleAuthorize(
   request: Request,
+  env: any,
   providerHostname: string,
   scope: string
 ): Response {
   const url = new URL(request.url);
-  const clientId = url.searchParams.get("client_id") || url.hostname;
-  const redirectUri =
-    url.searchParams.get("redirect_uri") || `${url.origin}/callback`;
+  const isLocalhostURL =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    // only at localhost!
+    request.headers.get("cf-connecting-ip") === "::1" ||
+    request.headers.get("cf-connecting-ip") === "127.0.0.1";
+
+  const clientId =
+    url.searchParams.get("client_id") || isLocalhostURL
+      ? "localhost"
+      : url.hostname;
+
+  // 8787 is wrangler default
+  const port = env.PORT || 8787;
+
+  // force https
+  const redirectUri = url.searchParams.get("redirect_uri")
+    ? url.searchParams.get("redirect_uri")
+    : isLocalhostURL
+    ? `http://localhost:${port}/callback`
+    : `https://${url.host}/callback`;
+
   const state = url.searchParams.get("state");
+
+  // TODO: ensure this is used
   const redirectTo = url.searchParams.get("redirect_to") || "/";
 
   // Build provider authorization URL
@@ -212,11 +233,10 @@ function handleAuthorize(
   // Store original redirect destination
   providerUrl.searchParams.set("resource", url.origin);
 
+  const providerUrlString = providerUrl.toString();
   return new Response(null, {
     status: 302,
-    headers: {
-      Location: providerUrl.toString(),
-    },
+    headers: { Location: providerUrlString },
   });
 }
 
@@ -226,6 +246,9 @@ async function handleCallback(
   sameSite: string
 ): Promise<Response> {
   const url = new URL(request.url);
+  const isLocalhostURL =
+    url.hostname === "localhost" || url.hostname === "127.0.0.1";
+
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
 
@@ -265,13 +288,13 @@ async function handleCallback(
 
     // Determine redirect URL
     const redirectTo = url.searchParams.get("redirect_to") || state || "/";
-
+    const securePart = isLocalhostURL ? "" : "Secure; ";
     // Set access token cookie and redirect
     return new Response(null, {
       status: 302,
       headers: {
         Location: redirectTo,
-        "Set-Cookie": `access_token=${tokenData.access_token}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`,
+        "Set-Cookie": `access_token=${tokenData.access_token}; HttpOnly; ${securePart}Max-Age=34560000; SameSite=${sameSite}; Path=/`,
       },
     });
   } catch (error) {

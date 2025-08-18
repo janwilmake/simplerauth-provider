@@ -3,8 +3,6 @@
   "name": "simplerauth_x-downstream",
   "compatibility_date": "2025-08-16",
   "main": "demo.ts",
-  "route": {
-    "custom_domain": true,
-    "pattern": "client.simplerauth.com"
-  }
+  "dev": { "port": 3000 },
+  "route": { "custom_domain": true, "pattern": "client.simplerauth.com" }
 }
