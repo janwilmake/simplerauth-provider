@@ -439,6 +439,8 @@ tag = "v1"
 
   if (path === "/admin") {
     const accessToken = getAccessToken(request);
+    const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
+
     if (!accessToken) {
       return new Response(
         JSON.stringify({
@@ -447,7 +449,9 @@ tag = "v1"
         }),
         {
           status: 401,
-          headers: { "WWW-Authenticate": 'Bearer realm="main"' },
+          headers: {
+            "WWW-Authenticate": `Bearer realm="main", login_url="${Location}", resource_metadata="${resourceMetadataUrl}`,
+          },
         }
       );
     }
@@ -663,6 +667,7 @@ async function handleMe(
   env: Env,
   ctx: ExecutionContext
 ): Promise<Response> {
+  const url = new URL(request.url);
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -690,6 +695,11 @@ async function handleMe(
     "Access-Control-Allow-Origin": "*",
   };
 
+  const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
+  const loginUrl = `${url.origin}/authorize?redirect_to=${encodeURIComponent(
+    request.url
+  )}`;
+
   // Get access token from request
   const accessToken = getAccessToken(request);
   if (!accessToken) {
@@ -702,7 +712,7 @@ async function handleMe(
         status: 401,
         headers: {
           ...headers,
-          "WWW-Authenticate": 'Bearer realm="main"',
+          "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
         },
       }
     );
@@ -743,7 +753,7 @@ async function handleMe(
           status: 401,
           headers: {
             ...headers,
-            "WWW-Authenticate": 'Bearer realm="main", error="invalid_token"',
+            "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
           },
         }
       );
@@ -775,8 +785,7 @@ async function handleAuthorize(
   let redirectUri = url.searchParams.get("redirect_uri");
   const responseType = url.searchParams.get("response_type") || "code";
   const state = url.searchParams.get("state");
-  const resource = url.searchParams.get("resource"); // MCP Required: Resource parameter
-
+  const resource = url.searchParams.get("resource");
   // If no client_id, this is a direct login request
   if (!clientId) {
     const url = new URL(request.url);
@@ -1083,7 +1092,7 @@ async function handleToken(
   }
 
   // MCP Required: Validate resource parameter matches if provided
-  if (resource && authData.resource !== resource) {
+  if (!resource || authData.resource !== resource) {
     return new Response(
       JSON.stringify({ error: "invalid_grant", message: "Invalid resource" }),
       { status: 400, headers }
@@ -1543,8 +1552,8 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
       const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
 
       // Require login
-      const Location = `${
-        new URL(request.url).origin
+      const loginUrl = `${
+        url.origin
       }/authorize?redirect_to=${encodeURIComponent(request.url)}`;
 
       return new Response(
@@ -1552,10 +1561,10 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
         {
           status: isBrowser ? 302 : 401,
           headers: {
-            Location,
-            "X-Login-URL": Location,
+            Location: loginUrl,
+            "X-Login-URL": loginUrl,
             // MCP Required: WWW-Authenticate header with resource metadata URL (RFC9728)
-            "WWW-Authenticate": `Bearer realm="main", login_url="${Location}", resource_metadata="${resourceMetadataUrl}"`,
+            "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
           },
         }
       );

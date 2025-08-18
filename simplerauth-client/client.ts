@@ -96,8 +96,7 @@ export function withSimplerAuth<TEnv = {}>(
         });
 
         if (userResponse.ok) {
-          const userData: { data: User } = await userResponse.json();
-          user = userData.data;
+          user = await userResponse.json();
           authenticated = true;
         }
       } catch (error) {
@@ -280,7 +279,7 @@ async function handleCallback(
 
   // Get redirect_uri and redirect_to from cookies
   const redirectUri = cookies.redirect_uri || `${url.origin}/callback`;
-  const redirectTo = cookies.redirect_to || "/";
+  const redirectTo = cookies.redirect_to || state || "/";
 
   try {
     const params = {
@@ -308,7 +307,7 @@ async function handleCallback(
       });
     }
 
-    const tokenData = await tokenResponse.json();
+    const tokenData: { access_token: string } = await tokenResponse.json();
 
     if (!tokenData.access_token) {
       return new Response("No access token received", { status: 400 });

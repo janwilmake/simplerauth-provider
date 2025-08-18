@@ -49,8 +49,9 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 
 AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled (flaredream).
 
-- If it's easy enough, change to use this login in `markdownfeed` and test markdownfeed MCP with https://mcp.p0web.com.
+- ✅ If it's easy enough, change to use this login in `markdownfeed`
 - ✅ Add configuration `allowedClients` to restrict which clients can authorize.
+- Test markdownfeed MCP with https://mcp.p0web.com. The problem now is that I don't hit 401 because the initialize endpoint is public. How do I tell `withMcp` that authorization is required?
 - Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
 
 When all is well, do an announcement for the `simplerauth-client`
