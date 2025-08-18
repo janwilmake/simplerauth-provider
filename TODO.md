@@ -50,7 +50,7 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
 - Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`. More work required to allow for packages (can hardcode speicific single-file ones maybe, at first, to skip bundling still)
 - Add it to `system[-ts].md`. Can even be without being a module for now, just package and proper buildscript and main entry should be configured.
 - Add configuration `allowedClients` to restrict which clients can authorize.
-- Create `@wilmakesystems` account with more subtle profile picture, and align the logo with that, so login comes over more trustworthy.
+- ✅ Create `@wilmakesystems` account with more subtle profile picture, and align the logo with that, so login comes over more trustworthy.
 
 When all is well, do an announcement for the `simplerauth-client`.
 
