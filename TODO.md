@@ -50,7 +50,7 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled (flaredream).
 
 - If it's easy enough, change to use this login in `markdownfeed` and test markdownfeed MCP with https://mcp.p0web.com.
-- Add configuration `allowedClients` to restrict which clients can authorize.
+- ✅ Add configuration `allowedClients` to restrict which clients can authorize.
 - Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization and security best practices. Put a LMPIFY prompt in readme that shows this!
 
 When all is well, do an announcement for the `simplerauth-client`
@@ -96,9 +96,11 @@ Makes no sense to wait for parallel oauth since it may take months; instead, use
 
 Discuss: require Github login or X login? their choice.
 
-## other modules flaredream
+## Other modules (flaredream)
 
 - Stripeflare module
 - Toolflare module
 
 All in all this will allow super easy paid app creation, perfect to promote parallel
+
+https://github.com/janwilmake/openapi-to-mcp

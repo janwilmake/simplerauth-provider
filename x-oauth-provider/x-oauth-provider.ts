@@ -408,7 +408,8 @@ export async function handleOAuth(
   env: Env,
   ctx: ExecutionContext,
   scope = "users.read tweet.read offline.access",
-  sameSite: "Strict" | "Lax" = "Lax"
+  sameSite: "Strict" | "Lax" = "Lax",
+  allowedClients: string[] | undefined
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -417,10 +418,11 @@ export async function handleOAuth(
     !env.X_CLIENT_ID ||
     !env.X_CLIENT_SECRET ||
     !env.ADMIN_X_USERNAME ||
+    !env.SELF_CLIENT_ID ||
     !env.UserDO
   ) {
     return new Response(
-      `Environment misconfigured. Ensure to have X_CLIENT_ID, X_CLIENT_SECRET, and ADMIN_X_USERNAME secrets set, as well as the Durable Object, with:
+      `Environment misconfigured. Ensure to have X_CLIENT_ID, X_CLIENT_SECRET, SELF_CLIENT_ID, and ADMIN_X_USERNAME secrets set, as well as the Durable Object, with:
 
 [[durable_objects.bindings]]
 name = "UserDO"
@@ -629,7 +631,7 @@ tag = "v1"
   }
 
   if (path === "/authorize") {
-    return handleAuthorize(request, env, scope, sameSite);
+    return handleAuthorize(request, env, scope, sameSite, allowedClients);
   }
 
   if (path === "/callback") {
@@ -770,7 +772,8 @@ async function handleAuthorize(
   request: Request,
   env: Env,
   scope: string,
-  sameSite: string
+  sameSite: string,
+  allowedClients: string[] | undefined
 ): Promise<Response> {
   const url = new URL(request.url);
   const clientId = url.searchParams.get("client_id");
@@ -820,6 +823,15 @@ async function handleAuthorize(
     return new Response("Invalid client_id: must be a valid domain", {
       status: 400,
     });
+  }
+
+  if (allowedClients !== undefined && !allowedClients.includes(clientId)) {
+    return new Response(
+      `This provider restricts client_ids that can be used, and ${clientId} is not one of them. Allowed client_ids: ${allowedClients.join(
+        ", "
+      )}`,
+      { status: 400 }
+    );
   }
 
   // If no redirect_uri provided, use default pattern
@@ -1462,14 +1474,21 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     allowedClients?: string[];
   }
 ): ExportedHandlerFetchHandler<Env & TEnv> {
-  const { scope, sameSite } = config || {};
+  const { scope, sameSite, allowedClients } = config || {};
 
   return async (
     request: Request,
     env: TEnv & Env,
     ctx: ExecutionContext
   ): Promise<Response> => {
-    const oauth = await handleOAuth(request, env, ctx, scope, sameSite);
+    const oauth = await handleOAuth(
+      request,
+      env,
+      ctx,
+      scope,
+      sameSite,
+      allowedClients
+    );
     if (oauth) {
       return oauth;
     }
