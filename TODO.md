@@ -56,7 +56,7 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
   - ✅ Confirm new `withMcp` works in markdownfeed
 - 🟠 Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization.
   - ✅ Added PCKE check and resource check to client, making it work with localhost too
-  - Fix resource audience validation in provider: https://letmeprompt.com/rules-httpsuithu-nwbujx0
+  - ✅ Fix resource audience validation in provider: https://letmeprompt.com/rules-httpsuithu-nwbujx0
   - Also hold my implementation against https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices
   - Put a LMPIFY prompt in readme that shows it's all good.
 

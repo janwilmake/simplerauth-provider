@@ -272,9 +272,11 @@ async function handleAuthorize(
   const port = env.PORT || 8787;
 
   // Default redirect URI
-  const defaultRedirectUri = isLocalhost(request)
-    ? `http://localhost:${port}/callback`
-    : `https://${url.host}/callback`;
+  const originUrl = isLocalhost(request)
+    ? `http://localhost:${port}`
+    : `https://${url.host}`;
+
+  const defaultRedirectUri = `${originUrl}/callback`;
 
   const providedRedirectUri = url.searchParams.get("redirect_uri");
   const redirectUri = providedRedirectUri || defaultRedirectUri;
@@ -310,7 +312,7 @@ async function handleAuthorize(
   providerUrl.searchParams.set("redirect_uri", redirectUri);
   providerUrl.searchParams.set("response_type", "code");
   providerUrl.searchParams.set("scope", scope);
-  providerUrl.searchParams.set("resource", url.origin); // MCP Required: resource parameter
+  providerUrl.searchParams.set("resource", originUrl); // MCP Required: resource parameter
   providerUrl.searchParams.set("code_challenge", codeChallenge);
   providerUrl.searchParams.set("code_challenge_method", "S256");
 
