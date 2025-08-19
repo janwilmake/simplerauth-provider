@@ -45,7 +45,7 @@ Initial implementation based on GitHub OAuth client-provider pattern.
 - 🤔 Specifically for basedpeople, doing a request to `ctx.user` every time makes this worker twice as expensive. Kinda wasteful, but is that important? Maybe, a cache to `/me` can be made configurable? Seems exessive to fetch it every time **Skip for now since this also tracks the user, which is something we want**
 - ✅ Create `@wilmakesystems` account with more subtle profile picture, and align the logo with that, so login comes over more trustworthy. **Actually it wasn't needed since it doesn't change anything, but it's good to have a separate account for login so it won't get banned easily. I can now get 'basic' on janwilmake and experiment on that account while keeping this stable**
 
-# TODO
+# 2025-08-19
 
 AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly disabled (flaredream).
 
@@ -54,31 +54,15 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
 - ✅ Test markdownfeed MCP with https://mcp.p0web.com. The problem now is that I don't hit 401 because the initialize endpoint is public. How do I tell `withMcp` that authorization is required? Is there a way in MCP authorization to make it optional? How should clients implement optional oauth? **Not possible** there seems no way currently to have an optional oauth requirement. You either make the server public or authenticated!
   - ✅ Make `withMcp` config to respond with 401 with `www-authorize` by proxying the response to a provided endpoint, e.g. `/me`. This one should be compliant, moving the auth compliance one level down.
   - ✅ Confirm new `withMcp` works in markdownfeed
-- 🟠 Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization.
+- ✅ Confirm it's secure and complies with https://modelcontextprotocol.io/specification/draft/basic/authorization.
   - ✅ Added PCKE check and resource check to client, making it work with localhost too
   - ✅ Fix resource audience validation in provider: https://letmeprompt.com/rules-httpsuithu-nwbujx0
-  - Also hold my implementation against https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices
-  - Put a LMPIFY prompt in readme that shows it's all good.
-
-## Scalability
-
-- Figure out how I can reduce load on aggregate.
-  - Cache `/me` from `simplerauth-client`?
-  - Only connect to aggregate once per 15 minutes (from user DO, not exported handler?)
-- Add per-apex ratelimit (1200 requests per minute should do) to prevent capacity constraints and DDOS problems
-
-## Blogpost
-
-It'd be great to put all of this into a nice blogpost going into the why as well...
-
-- Write a section in readme about scalability and performance, and how this may improve in the future (moving DOs around)
-- Lay out the concept of `domain-as-client-id` and explain MCP-recommended programmatic oauth flow.
-- When all is well, do an announcement for the `simplerauth-client`, it being the easiest way to add X login to your app (no secrets).
-- Think about critics and put this into the blog with counterarguments.
+  - ✅ Also hold my implementation against https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices
+  - ✅ Put a LMPIFY prompt in readme that shows it's all good.
 
 ## Meeting Mv
 
-First probe enthousiasm to create 'login with parallel' functionality
+First probe enthousiasm to create 'login with parallel' functionality.
 
 Find approval for one of these:
 

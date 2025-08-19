@@ -14,6 +14,12 @@
 - **Self-hostable** - Works with login.wilmake.com by default, but you can also host your own X OAuth Provider and configure that.
 - **Provider** - when using `simplerauth-client` other clients can login with your service too.
 
+# Security
+
+You can prompt the sourcecode on security, and see it's rated quite well by claude
+
+[![](https://b.lmpify.com)](https://letmeprompt.com/rules-httpsuithu-ynxf1f0)
+
 # Usage
 
 You can use this client by 'Wilmake Systems', that is hosted at https://login.wilmake.com, with very easy set-up.
