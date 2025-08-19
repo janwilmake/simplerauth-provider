@@ -60,23 +60,29 @@ export function withSimplerAuth<TEnv = {}>(
     }
 
     if (path === "/.well-known/oauth-protected-resource") {
-      return handleProtectedResourceMetadata(url, providerHostname);
+      return handleProtectedResourceMetadata(request, env, providerHostname);
     }
 
     if (path === "/authorize") {
-      return handleAuthorize(request, env, providerHostname, scope, sameSite);
+      return await handleAuthorize(
+        request,
+        env,
+        providerHostname,
+        scope,
+        sameSite
+      );
     }
 
     if (path === "/callback") {
-      return handleCallback(request, providerHostname, sameSite);
+      return await handleCallback(request, env, providerHostname, sameSite);
     }
 
     if (path === "/token") {
-      return handleToken(request, providerHostname);
+      return await handleToken(request, providerHostname);
     }
 
     if (path === "/me") {
-      return handleMe(request, providerHostname);
+      return await handleMe(request, providerHostname);
     }
 
     if (path === "/logout") {
@@ -167,11 +173,19 @@ function handleAuthorizationServerMetadata(
 }
 
 function handleProtectedResourceMetadata(
-  url: URL,
+  request: Request,
+  env: any,
   providerHostname: string
 ): Response {
+  const url = new URL(request.url);
+  const port = env.PORT || 8787;
+
+  const resource = isLocalhost(request)
+    ? `http://localhost:${port}`
+    : `https://${url.host}`;
+
   const metadata = {
-    resource: url.origin,
+    resource,
     authorization_servers: [`https://${providerHostname}`],
     scopes_supported: ["profile"],
     bearer_methods_supported: ["header", "body"],
@@ -181,7 +195,7 @@ function handleProtectedResourceMetadata(
   return new Response(JSON.stringify(metadata, null, 2), {
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=3600",
+      //  "Cache-Control": "public, max-age=3600",
     },
   });
 }
@@ -197,13 +211,56 @@ function isLocalhost(request: Request) {
   );
 }
 
-function handleAuthorize(
+// PKCE utility functions
+function generateCodeVerifier(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode.apply(null, Array.from(array)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return btoa(
+    String.fromCharCode.apply(null, Array.from(new Uint8Array(digest)))
+  )
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
+function validateRedirectUri(redirectUri: string, clientId: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+
+    // Allow localhost (HTTP is OK for localhost)
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+      return true;
+    }
+
+    // For non-localhost, must be HTTPS
+    if (url.protocol !== "https:") {
+      return false;
+    }
+
+    // Must match client_id hostname
+    return url.hostname === clientId;
+  } catch {
+    return false;
+  }
+}
+
+async function handleAuthorize(
   request: Request,
   env: any,
   providerHostname: string,
   scope: string,
   sameSite: string
-): Response {
+): Promise<Response> {
   const url = new URL(request.url);
 
   const clientId =
@@ -214,15 +271,38 @@ function handleAuthorize(
   // 8787 is wrangler default
   const port = env.PORT || 8787;
 
-  // force https
-  const redirectUri = url.searchParams.get("redirect_uri")
-    ? url.searchParams.get("redirect_uri")
-    : isLocalhost(request)
+  // Default redirect URI
+  const defaultRedirectUri = isLocalhost(request)
     ? `http://localhost:${port}/callback`
     : `https://${url.host}/callback`;
 
+  const providedRedirectUri = url.searchParams.get("redirect_uri");
+  const redirectUri = providedRedirectUri || defaultRedirectUri;
+
+  // Validate redirect URI
+  if (
+    providedRedirectUri &&
+    !validateRedirectUri(providedRedirectUri, clientId)
+  ) {
+    return new Response(
+      JSON.stringify({
+        error: "invalid_redirect_uri",
+        error_description:
+          "Redirect URI must use HTTPS (except localhost) and match client_id hostname",
+      }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+
   const state = url.searchParams.get("state");
   const redirectTo = url.searchParams.get("redirect_to") || "/";
+
+  // Generate PKCE parameters
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
 
   // Build provider authorization URL
   const providerUrl = new URL(`https://${providerHostname}/authorize`);
@@ -230,16 +310,18 @@ function handleAuthorize(
   providerUrl.searchParams.set("redirect_uri", redirectUri);
   providerUrl.searchParams.set("response_type", "code");
   providerUrl.searchParams.set("scope", scope);
+  providerUrl.searchParams.set("resource", url.origin); // MCP Required: resource parameter
+  providerUrl.searchParams.set("code_challenge", codeChallenge);
+  providerUrl.searchParams.set("code_challenge_method", "S256");
+
   if (state) {
     providerUrl.searchParams.set("state", state);
   }
-  // Store original redirect destination
-  providerUrl.searchParams.set("resource", url.origin);
 
   const providerUrlString = providerUrl.toString();
   console.log({ providerUrlString });
 
-  // Set cookies for redirect_uri and redirect_to
+  // Set cookies for redirect_uri, redirect_to, and code_verifier
   const securePart = isLocalhost(request) ? "" : "Secure; ";
   const headers = new Headers();
   headers.set("Location", providerUrlString);
@@ -255,6 +337,12 @@ function handleAuthorize(
       redirectTo
     )}; HttpOnly; ${securePart}Max-Age=600; SameSite=${sameSite}; Path=/`
   );
+  headers.append(
+    "Set-Cookie",
+    `code_verifier=${encodeURIComponent(
+      codeVerifier
+    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=${sameSite}; Path=/`
+  );
 
   return new Response(null, {
     status: 302,
@@ -264,6 +352,7 @@ function handleAuthorize(
 
 async function handleCallback(
   request: Request,
+  env: any,
   providerHostname: string,
   sameSite: string
 ): Promise<Response> {
@@ -277,19 +366,34 @@ async function handleCallback(
     return new Response("Missing authorization code", { status: 400 });
   }
 
-  // Get redirect_uri and redirect_to from cookies
+  // Get stored values from cookies
   const redirectUri = cookies.redirect_uri || `${url.origin}/callback`;
   const redirectTo = cookies.redirect_to || state || "/";
+  const codeVerifier = cookies.code_verifier;
+
+  if (!codeVerifier) {
+    return new Response("Missing code verifier", { status: 400 });
+  }
 
   try {
+    const url = new URL(request.url);
+    const port = env.PORT || 8787;
+    const resource = isLocalhost(request)
+      ? `http://localhost:${port}`
+      : `https://${url.host}`;
+
     const params = {
       grant_type: "authorization_code",
       code: code,
       client_id: isLocalhost(request) ? "localhost" : url.hostname,
       redirect_uri: redirectUri,
+      code_verifier: codeVerifier, // PKCE parameter
+      resource,
       ...(state && { state }),
     };
+
     console.log({ params });
+
     // Exchange code for token with the provider
     const tokenResponse = await fetch(`https://${providerHostname}/token`, {
       method: "POST",
@@ -321,6 +425,7 @@ async function handleCallback(
       "Set-Cookie",
       `access_token=${tokenData.access_token}; HttpOnly; ${securePart}Max-Age=34560000; SameSite=${sameSite}; Path=/`
     );
+    // Clear temporary cookies
     headers.append(
       "Set-Cookie",
       `redirect_uri=; HttpOnly; ${securePart}Max-Age=0; SameSite=${sameSite}; Path=/`
@@ -328,6 +433,10 @@ async function handleCallback(
     headers.append(
       "Set-Cookie",
       `redirect_to=; HttpOnly; ${securePart}Max-Age=0; SameSite=${sameSite}; Path=/`
+    );
+    headers.append(
+      "Set-Cookie",
+      `code_verifier=; HttpOnly; ${securePart}Max-Age=0; SameSite=${sameSite}; Path=/`
     );
 
     return new Response(null, {
@@ -356,27 +465,79 @@ async function handleToken(
     });
   }
 
-  // Proxy token requests to the provider
-  const url = new URL(request.url);
-  const providerUrl = `https://${providerHostname}/token`;
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: "method_not_allowed" }), {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  }
 
-  const response = await fetch(providerUrl, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  });
+  try {
+    // Parse the form data
+    const formData = await request.formData();
+    const resource = formData.get("resource");
 
-  // Return the provider's response with CORS headers
-  const newResponse = new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: {
-      ...Object.fromEntries(response.headers),
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+    // MCP Required: resource parameter validation
+    if (!resource) {
+      return new Response(
+        JSON.stringify({
+          error: "invalid_request",
+          error_description: "resource parameter is required",
+        }),
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
 
-  return newResponse;
+    // Proxy token request to the provider with all parameters
+    const providerUrl = `https://${providerHostname}/token`;
+    const response = await fetch(providerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams(Object.fromEntries(formData)),
+    });
+
+    // Return the provider's response with CORS headers
+    const responseBody = await response.text();
+    const newResponse = new Response(responseBody, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: {
+        "Content-Type":
+          response.headers.get("Content-Type") || "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+      },
+    });
+
+    return newResponse;
+  } catch (error) {
+    console.error("Token endpoint error:", error);
+    return new Response(
+      JSON.stringify({
+        error: "server_error",
+        error_description: "Internal server error",
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+  }
 }
 
 async function handleMe(
@@ -395,35 +556,80 @@ async function handleMe(
     });
   }
 
+  const url = new URL(request.url);
+  const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
+  const loginUrl = `/authorize?redirect_to=${encodeURIComponent(request.url)}`;
+
+  // Check for access token
+  const accessToken = getAccessToken(request);
+  if (!accessToken) {
+    return new Response(
+      JSON.stringify({
+        error: "unauthorized",
+        error_description: "Access token required",
+      }),
+      {
+        status: 401,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
+        },
+      }
+    );
+  }
+
   // Proxy /me requests to the provider
   const providerUrl = `https://${providerHostname}/me`;
 
-  const response = await fetch(providerUrl, {
-    method: request.method,
-    headers: request.headers,
-  });
+  try {
+    const response = await fetch(providerUrl, {
+      method: request.method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
-  // Return the provider's response with CORS headers
+    const responseBody = await response.text();
 
-  type UserResult = {
-    data: {
-      id: string;
-      name: string;
-      username: string;
-      profile_image_url?: string | undefined;
-      verified?: boolean | undefined;
-    };
-  };
-  const newResponse = new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: {
-      ...Object.fromEntries(response.headers),
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+    if (!response.ok) {
+      return new Response(responseBody, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: {
+          "Content-Type":
+            response.headers.get("Content-Type") || "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
+        },
+      });
+    }
 
-  return newResponse;
+    return new Response(responseBody, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: {
+        "Content-Type":
+          response.headers.get("Content-Type") || "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (error) {
+    console.error("Me endpoint error:", error);
+    return new Response(
+      JSON.stringify({
+        error: "server_error",
+        error_description: "Failed to verify token",
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+  }
 }
 
 function handleLogout(request: Request, sameSite: string): Response {

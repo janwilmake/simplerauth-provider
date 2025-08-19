@@ -126,15 +126,15 @@ export class UserDO extends DurableObject {
 
   async setAuthData(
     xAccessToken: string,
-    encryptedAccessToken: string,
+    userId: string,
     clientId: string,
     redirectUri: string,
-    resource?: string
+    resource: string
   ) {
     // Keep auth data storage unchanged (using KV storage)
     await this.storage.put("data", {
       x_access_token: xAccessToken,
-      access_token: encryptedAccessToken,
+      userId,
       clientId,
       redirectUri,
       resource,
@@ -145,7 +145,7 @@ export class UserDO extends DurableObject {
     // Keep auth data storage unchanged (using KV storage)
     return this.storage.get<{
       x_access_token: string;
-      access_token: string;
+      userId: string;
       clientId: string;
       redirectUri: string;
       resource?: string;
@@ -902,7 +902,7 @@ async function handleAuthorize(
     redirectUri,
     state,
     originalState: state,
-    resource, // MCP: Store resource parameter
+    resource,
   };
 
   const providerStateString = btoa(JSON.stringify(providerState));
@@ -952,7 +952,7 @@ async function createAuthCodeAndRedirect(
   redirectUri: string,
   state: string | null,
   userId: string,
-  resource?: string
+  resource: string
 ): Promise<Response> {
   // Generate auth code
   const authCode = generateCodeVerifier(); // Reuse the same random generation
@@ -976,7 +976,7 @@ async function createAuthCodeAndRedirect(
     userId, // Store user_id instead of encrypted access token
     clientId,
     redirectUri,
-    resource // MCP: Store resource parameter
+    resource
   );
 
   // Redirect back to client with auth code
@@ -1094,24 +1094,28 @@ async function handleToken(
   // MCP Required: Validate resource parameter matches if provided
   if (!resource || authData.resource !== resource) {
     return new Response(
-      JSON.stringify({ error: "invalid_grant", message: "Invalid resource" }),
+      JSON.stringify({
+        error: "invalid_grant",
+        message: `Invalid resource: ${resource}. we wanted: ${authData.resource}`,
+      }),
       { status: 400, headers }
     );
   }
 
-  // Get user DO and create login for this client
-  const userId = authData.access_token; // This is now the user_id
   const userDO = getMultiStub(
     env.UserDO,
     [
-      { name: `${USER_DO_PREFIX}${userId}` },
+      { name: `${USER_DO_PREFIX}${authData.userId}` },
       { name: `${USER_DO_PREFIX}aggregate:` },
     ],
     ctx
   );
 
   // Create new access token for this client
-  const accessToken = await userDO.createLogin(userId, clientId.toString());
+  const accessToken = await userDO.createLogin(
+    authData.userId,
+    clientId.toString()
+  );
 
   // Return the new access token
   return new Response(
@@ -1155,6 +1159,7 @@ async function handleCallback(
     return new Response("Invalid state format", { status: 400 });
   }
 
+  console.log("callbackstate", { state });
   // Exchange code for token with X
   const tokenResponse = await fetch("https://api.x.com/2/oauth2/token", {
     method: "POST",
@@ -1226,8 +1231,8 @@ async function handleCallback(
         providerState.clientId,
         providerState.redirectUri,
         providerState.state,
-        user.id, // Use user.id instead of encrypted access token
-        providerState.resource // MCP: Pass through resource parameter
+        user.id,
+        providerState.resource
       );
 
       // Create access token for this client for cookie-based access
