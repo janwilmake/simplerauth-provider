@@ -462,7 +462,7 @@ tag = "v1"
         {
           status: 401,
           headers: {
-            "WWW-Authenticate": `Bearer realm="main", login_url="${Location}", resource_metadata="${resourceMetadataUrl}`,
+            "WWW-Authenticate": `Bearer realm="main", resource_metadata="${resourceMetadataUrl}`,
           },
         }
       );
@@ -1105,6 +1105,7 @@ async function handleToken(
 
   // MCP Required: Validate resource parameter matches if provided
   if (!resource || authData.resource !== resource) {
+    console.error({ resource, authResource: authData.resource });
     return new Response(
       JSON.stringify({
         error: "invalid_grant",
@@ -1563,7 +1564,7 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
       }/authorize?redirect_to=${encodeURIComponent(request.url)}`;
 
       return new Response(
-        `"access_token" Cookie or "Authorization" header required. User must login at ${Location}.`,
+        `"access_token" Cookie or "Authorization" header required. User must login at ${loginUrl}.`,
         {
           status: isBrowser ? 302 : 401,
           headers: {

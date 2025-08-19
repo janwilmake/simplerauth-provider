@@ -60,24 +60,9 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
   - ✅ Also hold my implementation against https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices
   - ✅ Put a LMPIFY prompt in readme that shows it's all good.
 
-## Meeting Mv
+# Fix security encryption
 
-First probe enthousiasm to create 'login with parallel' functionality.
-
-Find approval for one of these:
-
-- Option 1: Demonstrate standalone POC OAuth with all MCP stuff
-- Option 2: Make parallel oauth provider that binds parallel API key to your X account, after which it's super easy to login into different recipes or tiny apps.
-
-## Parallel OAuth provider
-
-Just proxy through to login.wilmake.com to be logged in and let /token endpoint respond with the parallel API key instead
-
-Context - https://github.com/janwilmake/simplerauth-provider
-
-Makes no sense to wait for parallel oauth since it may take months; instead, use this first, and use it. Replace with their own oauth later.
-
-Discuss: require Github login or X login? their choice.
+https://x.com/wgw_eth/status/1957840161263268344
 
 ## Bonus
 
