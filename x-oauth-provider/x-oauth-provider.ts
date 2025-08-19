@@ -188,6 +188,12 @@ export class UserDO extends DurableObject {
     clientId: string,
     resource: string
   ): Promise<string> {
+    // Validate that clientId matches resource hostname
+    const resourceUrl = new URL(resource);
+    if (resourceUrl.hostname !== clientId) {
+      throw new Error("Client ID must match resource hostname");
+    }
+
     // Get the user's X access token
     const user = this.sql
       .exec(`SELECT x_access_token FROM users WHERE user_id = ?`, userId)
@@ -199,9 +205,10 @@ export class UserDO extends DurableObject {
 
     const xAccessToken = user.x_access_token as string;
 
-    // Create access token in format user_id:client_id:x_access_token
-    const tokenData = `${userId};${clientId};${resource};${xAccessToken}`;
+    const tokenData = `${userId};${resource};${xAccessToken}`;
     const encryptedData = await encrypt(tokenData, this.env.ENCRYPTION_SECRET);
+
+    // Create access token in format user_id:client_id:x_access_token
     const accessToken = `simple_${encryptedData}`;
 
     const now = Math.floor(Date.now() / 1000);
@@ -335,9 +342,9 @@ export class UserDO extends DurableObject {
         encryptedData,
         this.env.ENCRYPTION_SECRET
       );
-      const [userId, clientId, resource, xAccessToken] =
-        decryptedData.split(";");
-
+      const [userId, resource, xAccessToken] = decryptedData.split(";");
+      // Derive client_id from resource
+      const clientId = new URL(resource).hostname;
       // Verify login exists
       const loginResult = this.sql
         .exec(
@@ -731,23 +738,7 @@ async function handleMe(
 
     const encryptedData = accessToken.substring(7);
     const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
-    const [userId, clientId, resource, xAccessToken] = decryptedData.split(";");
-
-    if (resource !== url.origin) {
-      return new Response(
-        JSON.stringify({
-          error: "invalid_token",
-          error_description: "Token not issued for this resource",
-        }),
-        {
-          status: 401,
-          headers: {
-            "Content-Type": "application/json",
-            "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
-          },
-        }
-      );
-    }
+    const [userId] = decryptedData.split(";");
 
     // Get user data from Durable Object using user_id
     const userDO = getMultiStub(
