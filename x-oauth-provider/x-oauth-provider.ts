@@ -39,6 +39,26 @@ const isQueryReadOnly = (query: string) => {
   return query.toLowerCase().startsWith("select ");
 };
 
+function isLocalhost(request: Request): boolean {
+  const url = new URL(request.url);
+  return (
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    // only at localhost!
+    request.headers.get("cf-connecting-ip") === "::1" ||
+    request.headers.get("cf-connecting-ip") === "127.0.0.1"
+  );
+}
+
+function getOrigin(request: Request, env?: any): string {
+  const url = new URL(request.url);
+  if (isLocalhost(request)) {
+    const port = env?.PORT || 8787;
+    return `http://localhost:${port}`;
+  }
+  return url.origin;
+}
+
 @Queryable()
 export class UserDO extends DurableObject {
   private storage: DurableObjectStorage;
@@ -73,6 +93,7 @@ export class UserDO extends DurableObject {
         access_token TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         client_id TEXT NOT NULL,
+        resource TEXT NOT NULL,
         created_at INTEGER DEFAULT (unixepoch()),
         last_active_at INTEGER DEFAULT (unixepoch()),
         session_count INTEGER DEFAULT 1,
@@ -105,6 +126,13 @@ export class UserDO extends DurableObject {
     try {
       this.sql.exec(
         `ALTER TABLE logins ADD COLUMN session_count INTEGER DEFAULT 1`
+      );
+    } catch (e) {
+      // Column already exists
+    }
+    try {
+      this.sql.exec(
+        `ALTER TABLE logins ADD COLUMN resource TEXT NOT NULL DEFAULT ''`
       );
     } catch (e) {
       // Column already exists
@@ -183,7 +211,11 @@ export class UserDO extends DurableObject {
     );
   }
 
-  async createLogin(userId: string, clientId: string): Promise<string> {
+  async createLogin(
+    userId: string,
+    clientId: string,
+    resource: string
+  ): Promise<string> {
     // Get the user's X access token
     const user = this.sql
       .exec(`SELECT x_access_token FROM users WHERE user_id = ?`, userId)
@@ -195,8 +227,8 @@ export class UserDO extends DurableObject {
 
     const xAccessToken = user.x_access_token as string;
 
-    // Create access token in format user_id:client_id:x_access_token
-    const tokenData = `${userId}:${clientId}:${xAccessToken}`;
+    // Create access token in format user_id;client_id;resource;x_access_token
+    const tokenData = `${userId};${clientId};${resource};${xAccessToken}`;
     const encryptedData = await encrypt(tokenData, this.env.ENCRYPTION_SECRET);
     const accessToken = `simple_${encryptedData}`;
 
@@ -204,11 +236,12 @@ export class UserDO extends DurableObject {
 
     // Store login with last_active_at set to now
     this.sql.exec(
-      `INSERT OR REPLACE INTO logins (access_token, user_id, client_id, last_active_at, session_count)
-       VALUES (?, ?, ?, ?, COALESCE((SELECT session_count FROM logins WHERE access_token = ?), 1))`,
+      `INSERT OR REPLACE INTO logins (access_token, user_id, client_id, resource, last_active_at, session_count)
+       VALUES (?, ?, ?, ?, ?, COALESCE((SELECT session_count FROM logins WHERE access_token = ?), 1))`,
       accessToken,
       userId,
       clientId,
+      resource,
       now,
       accessToken // for COALESCE subquery
     );
@@ -319,9 +352,10 @@ export class UserDO extends DurableObject {
     user: XUser;
     xAccessToken: string;
     clientId: string;
+    resource: string;
   } | null> {
     try {
-      // Decrypt the access token to get user_id, client_id, and x_access_token
+      // Decrypt the access token to get user_id, client_id, resource, and x_access_token
       if (!accessToken.startsWith("simple_")) {
         return null;
       }
@@ -331,15 +365,17 @@ export class UserDO extends DurableObject {
         encryptedData,
         this.env.ENCRYPTION_SECRET
       );
-      const [userId, clientId, xAccessToken] = decryptedData.split(":");
+      const [userId, clientId, resource, xAccessToken] =
+        decryptedData.split(";");
 
       // Verify login exists
       const loginResult = this.sql
         .exec(
-          `SELECT * FROM logins WHERE access_token = ? AND user_id = ? AND client_id = ?`,
+          `SELECT * FROM logins WHERE access_token = ? AND user_id = ? AND client_id = ? AND resource = ?`,
           accessToken,
           userId,
-          clientId
+          clientId,
+          resource
         )
         .toArray()[0];
 
@@ -377,6 +413,7 @@ export class UserDO extends DurableObject {
         user,
         xAccessToken,
         clientId,
+        resource,
       };
     } catch (error) {
       console.error("Error decrypting access token:", error);
@@ -439,7 +476,8 @@ tag = "v1"
 
   if (path === "/admin") {
     const accessToken = getAccessToken(request);
-    const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
+    const origin = getOrigin(request, env);
+    const resourceMetadataUrl = `${origin}/.well-known/oauth-protected-resource`;
 
     if (!accessToken) {
       return new Response(
@@ -450,7 +488,27 @@ tag = "v1"
         {
           status: 401,
           headers: {
-            "WWW-Authenticate": `Bearer realm="main", login_url="${Location}", resource_metadata="${resourceMetadataUrl}`,
+            "WWW-Authenticate": `Bearer realm="main", login_url="${origin}/authorize", resource_metadata="${resourceMetadataUrl}"`,
+          },
+        }
+      );
+    }
+    const isValid = await validateTokenAudience(
+      accessToken,
+      origin,
+      env.ENCRYPTION_SECRET
+    );
+    // Validate token audience for admin endpoint
+    if (!isValid) {
+      return new Response(
+        JSON.stringify({
+          error: "invalid_token",
+          error_description: "Token not valid for this resource",
+        }),
+        {
+          status: 401,
+          headers: {
+            "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${origin}/authorize", resource_metadata="${resourceMetadataUrl}"`,
           },
         }
       );
@@ -464,7 +522,7 @@ tag = "v1"
 
       const encryptedData = accessToken.substring(7);
       const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
-      const [userId] = decryptedData.split(":");
+      const [userId] = decryptedData.split(";");
 
       const userDO = getMultiStub(
         env.UserDO,
@@ -501,13 +559,14 @@ tag = "v1"
 
   // MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)
   if (path === "/.well-known/oauth-authorization-server") {
+    const origin = getOrigin(request, env);
     const metadata = {
-      issuer: url.origin,
-      authorization_endpoint: `${url.origin}/authorize`,
-      token_endpoint: `${url.origin}/token`,
+      issuer: origin,
+      authorization_endpoint: `${origin}/authorize`,
+      token_endpoint: `${origin}/token`,
       // Public client without secret
       token_endpoint_auth_methods_supported: ["none"],
-      registration_endpoint: `${url.origin}/register`,
+      registration_endpoint: `${origin}/register`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       code_challenge_methods_supported: ["S256"],
@@ -524,12 +583,13 @@ tag = "v1"
 
   // Protected resource metadata endpoint
   if (path === "/.well-known/oauth-protected-resource") {
+    const origin = getOrigin(request, env);
     const metadata = {
-      resource: url.origin,
-      authorization_servers: [url.origin],
+      resource: origin,
+      authorization_servers: [origin],
       scopes_supported: ["users.read", "tweet.read", "offline.access"],
       bearer_methods_supported: ["header"],
-      resource_documentation: url.origin,
+      resource_documentation: origin,
     };
 
     return new Response(JSON.stringify(metadata, null, 2), {
@@ -649,11 +709,14 @@ tag = "v1"
   if (path === "/logout") {
     const url = new URL(request.url);
     const redirectTo = url.searchParams.get("redirect_to") || "/";
+    const isSecure = !isLocalhost(request);
     return new Response(null, {
       status: 302,
       headers: {
         Location: redirectTo,
-        "Set-Cookie": `access_token=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`,
+        "Set-Cookie": `access_token=; HttpOnly; ${
+          isSecure ? "Secure; " : ""
+        }SameSite=${sameSite}; Max-Age=0; Path=/`,
       },
     });
   }
@@ -667,7 +730,7 @@ async function handleMe(
   env: Env,
   ctx: ExecutionContext
 ): Promise<Response> {
-  const url = new URL(request.url);
+  const origin = getOrigin(request, env);
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -695,8 +758,8 @@ async function handleMe(
     "Access-Control-Allow-Origin": "*",
   };
 
-  const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
-  const loginUrl = `${url.origin}/authorize?redirect_to=${encodeURIComponent(
+  const resourceMetadataUrl = `${origin}/.well-known/oauth-protected-resource`;
+  const loginUrl = `${origin}/authorize?redirect_to=${encodeURIComponent(
     request.url
   )}`;
 
@@ -712,7 +775,28 @@ async function handleMe(
         status: 401,
         headers: {
           ...headers,
-          "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
+          "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
+        },
+      }
+    );
+  }
+  const isValid = await validateTokenAudience(
+    accessToken,
+    origin,
+    env.ENCRYPTION_SECRET
+  );
+  // MCP Required: Validate token audience
+  if (!isValid) {
+    return new Response(
+      JSON.stringify({
+        error: "invalid_token",
+        error_description: "Token not valid for this resource",
+      }),
+      {
+        status: 401,
+        headers: {
+          ...headers,
+          "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
         },
       }
     );
@@ -726,7 +810,7 @@ async function handleMe(
 
     const encryptedData = accessToken.substring(7);
     const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
-    const [userId] = decryptedData.split(":");
+    const [userId] = decryptedData.split(";");
 
     // Get user data from Durable Object using user_id
     const userDO = getMultiStub(
@@ -753,7 +837,7 @@ async function handleMe(
           status: 401,
           headers: {
             ...headers,
-            "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
+            "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
           },
         }
       );
@@ -781,16 +865,16 @@ async function handleAuthorize(
   allowedClients: string[] | undefined
 ): Promise<Response> {
   const url = new URL(request.url);
+  const origin = getOrigin(request, env);
   const clientId = url.searchParams.get("client_id");
   let redirectUri = url.searchParams.get("redirect_uri");
   const responseType = url.searchParams.get("response_type") || "code";
   const state = url.searchParams.get("state");
-  const resource = url.searchParams.get("resource");
+  const resource = url.searchParams.get("resource") || origin;
+
   // If no client_id, this is a direct login request
   if (!clientId) {
-    const url = new URL(request.url);
     const redirectTo = url.searchParams.get("redirect_to") || "/";
-    const resource = url.searchParams.get("resource");
     const requestedScope = url.searchParams.get("scope") || scope;
 
     // Generate PKCE code verifier and challenge
@@ -805,19 +889,22 @@ async function handleAuthorize(
     const xUrl = new URL("https://x.com/i/oauth2/authorize");
     xUrl.searchParams.set("response_type", "code");
     xUrl.searchParams.set("client_id", env.X_CLIENT_ID);
-    xUrl.searchParams.set("redirect_uri", `${url.origin}/callback`);
+    xUrl.searchParams.set("redirect_uri", `${origin}/callback`);
     xUrl.searchParams.set("scope", requestedScope);
     xUrl.searchParams.set("state", stateString);
     xUrl.searchParams.set("code_challenge", codeChallenge);
     xUrl.searchParams.set("code_challenge_method", "S256");
 
+    const isSecure = !isLocalhost(request);
     return new Response(null, {
       status: 302,
       headers: {
         Location: xUrl.toString(),
         "Set-Cookie": `oauth_state=${encodeURIComponent(
           stateString
-        )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`,
+        )}; HttpOnly; ${
+          isSecure ? "Secure; " : ""
+        }SameSite=${sameSite}; Max-Age=600; Path=/`,
       },
     });
   }
@@ -840,7 +927,10 @@ async function handleAuthorize(
 
   // If no redirect_uri provided, use default pattern
   if (!redirectUri) {
-    redirectUri = `https://${clientId}/callback`;
+    redirectUri =
+      clientId === "localhost"
+        ? `http://localhost:8787/callback`
+        : `https://${clientId}/callback`;
   }
 
   // Validate redirect_uri is HTTPS and on same origin as client_id
@@ -870,7 +960,10 @@ async function handleAuthorize(
 
   // Check if user is already authenticated
   const accessToken = getAccessToken(request);
-  if (accessToken) {
+  if (
+    accessToken &&
+    (await validateTokenAudience(accessToken, resource, env.ENCRYPTION_SECRET))
+  ) {
     try {
       // Decrypt access token to get user_id
       if (!accessToken.startsWith("simple_")) {
@@ -879,7 +972,7 @@ async function handleAuthorize(
 
       const encryptedData = accessToken.substring(7);
       const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
-      const [userId] = decryptedData.split(":");
+      const [userId] = decryptedData.split(";");
 
       // User is already authenticated, create auth code and redirect
       return await createAuthCodeAndRedirect(
@@ -923,24 +1016,25 @@ async function handleAuthorize(
   const xUrl = new URL("https://x.com/i/oauth2/authorize");
   xUrl.searchParams.set("response_type", "code");
   xUrl.searchParams.set("client_id", env.X_CLIENT_ID);
-  xUrl.searchParams.set("redirect_uri", `${url.origin}/callback`);
+  xUrl.searchParams.set("redirect_uri", `${origin}/callback`);
   xUrl.searchParams.set("scope", scope);
   xUrl.searchParams.set("state", xStateString);
   xUrl.searchParams.set("code_challenge", codeChallenge);
   xUrl.searchParams.set("code_challenge_method", "S256");
 
+  const isSecure = !isLocalhost(request);
   const headers = new Headers({ Location: xUrl.toString() });
   headers.append(
     "Set-Cookie",
-    `oauth_state=${encodeURIComponent(
-      xStateString
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    `oauth_state=${encodeURIComponent(xStateString)}; HttpOnly; ${
+      isSecure ? "Secure; " : ""
+    }SameSite=${sameSite}; Max-Age=600; Path=/`
   );
   headers.append(
     "Set-Cookie",
-    `provider_state=${encodeURIComponent(
-      providerStateString
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    `provider_state=${encodeURIComponent(providerStateString)}; HttpOnly; ${
+      isSecure ? "Secure; " : ""
+    }SameSite=${sameSite}; Max-Age=600; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
@@ -1037,7 +1131,7 @@ async function handleToken(
     });
   }
 
-  if (!code || !clientId) {
+  if (!code || !clientId || !resource) {
     return new Response(JSON.stringify({ error: "invalid_request" }), {
       status: 400,
       headers,
@@ -1096,7 +1190,7 @@ async function handleToken(
     return new Response(
       JSON.stringify({
         error: "invalid_grant",
-        message: `Invalid resource: ${resource}. we wanted: ${authData.resource}`,
+        message: `Invalid resource: ${resource}. Expected: ${authData.resource}`,
       }),
       { status: 400, headers }
     );
@@ -1111,10 +1205,11 @@ async function handleToken(
     ctx
   );
 
-  // Create new access token for this client
+  // Create new access token for this client with resource
   const accessToken = await userDO.createLogin(
     authData.userId,
-    clientId.toString()
+    clientId.toString(),
+    resource.toString()
   );
 
   // Return the new access token
@@ -1135,6 +1230,7 @@ async function handleCallback(
   sameSite: string
 ): Promise<Response> {
   const url = new URL(request.url);
+  const origin = getOrigin(request, env);
   const code = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state");
 
@@ -1171,7 +1267,7 @@ async function handleCallback(
     },
     body: new URLSearchParams({
       code: code,
-      redirect_uri: `${url.origin}/callback`,
+      redirect_uri: `${origin}/callback`,
       grant_type: "authorization_code",
       code_verifier: state.codeVerifier,
     }),
@@ -1238,22 +1334,30 @@ async function handleCallback(
       // Create access token for this client for cookie-based access
       const accessToken = await userDO.createLogin(
         user.id,
-        providerState.clientId
+        providerState.clientId,
+        providerState.resource
       );
 
       // Set access token cookie and clear state cookies
+      const isSecure = !isLocalhost(request);
       const headers = new Headers(response.headers);
       headers.append(
         "Set-Cookie",
-        `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+        `oauth_state=; HttpOnly; ${
+          isSecure ? "Secure; " : ""
+        }SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `provider_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+        `provider_state=; HttpOnly; ${
+          isSecure ? "Secure; " : ""
+        }SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `access_token=${accessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
+        `access_token=${accessToken}; HttpOnly; ${
+          isSecure ? "Secure; " : ""
+        }Max-Age=34560000; SameSite=${sameSite}; Path=/`
       );
 
       return new Response(response.body, { status: response.status, headers });
@@ -1265,17 +1369,23 @@ async function handleCallback(
   // Normal redirect (direct login) - create access token for browser client
   const browserAccessToken = await userDO.createLogin(
     user.id,
-    env.SELF_CLIENT_ID
+    env.SELF_CLIENT_ID,
+    origin
   );
 
+  const isSecure = !isLocalhost(request);
   const headers = new Headers({ Location: state.redirectTo || "/" });
   headers.append(
     "Set-Cookie",
-    `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+    `oauth_state=; HttpOnly; ${
+      isSecure ? "Secure; " : ""
+    }SameSite=${sameSite}; Max-Age=0; Path=/`
   );
   headers.append(
     "Set-Cookie",
-    `access_token=${browserAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
+    `access_token=${browserAccessToken}; HttpOnly; ${
+      isSecure ? "Secure; " : ""
+    }Max-Age=34560000; SameSite=${sameSite}; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
@@ -1298,18 +1408,27 @@ export function getAccessToken(request: Request): string | null {
 }
 
 /**
- * Validate that an access token is intended for this resource server.
- * MCP servers MUST validate token audience.
+ * Async version of token audience validation that properly decrypts the token
  */
-export function validateTokenAudience(
-  request: Request,
-  expectedResource: string
-): boolean {
-  // For this simple implementation, we assume tokens encrypted with our secret
-  // are valid for our resource. In a production system, you would decode
-  // the token and check the 'aud' claim or resource parameter.
-  const token = getAccessToken(request);
-  return token !== null;
+export async function validateTokenAudience(
+  accessToken: string,
+  expectedResource: string,
+  encryptionSecret: string
+): Promise<boolean> {
+  try {
+    if (!accessToken.startsWith("simple_")) {
+      return false;
+    }
+
+    const encryptedData = accessToken.substring(7);
+    const decryptedData = await decrypt(encryptedData, encryptionSecret);
+    const [userId, clientId, resource, xAccessToken] = decryptedData.split(";");
+
+    // Validate that the token's resource matches the expected resource
+    return resource === expectedResource;
+  } catch (error) {
+    return false;
+  }
 }
 
 // Utility functions
@@ -1509,42 +1628,90 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     let registered = false;
     let xAccessToken: string | undefined = undefined;
     const accessToken = getAccessToken(request);
+
     if (accessToken) {
       try {
-        // Decrypt access token to get user_id
-        if (!accessToken.startsWith("simple_")) {
-          throw new Error("Invalid access token format");
-        }
+        const origin = getOrigin(request, env);
 
-        const encryptedData = accessToken.substring(7);
-        const decryptedData = await decrypt(
-          encryptedData,
-          env.ENCRYPTION_SECRET
-        );
-        const [userId] = decryptedData.split(":");
-
-        // Get user data from Durable Object using user_id
-        userDO = getMultiStub(
-          env.UserDO,
-          [
-            { name: `${USER_DO_PREFIX}${userId}` },
-            { name: `${USER_DO_PREFIX}aggregate:` },
-          ],
-          ctx
-        );
-
-        // Update activity before getting user data (except for /me endpoint which handles it separately)
+        // For non-OAuth endpoints, validate token audience
         const url = new URL(request.url);
-        if (url.pathname !== "/me") {
-          await userDO.updateActivity(accessToken);
-        }
+        if (
+          !url.pathname.startsWith("/.well-known/") &&
+          url.pathname !== "/authorize" &&
+          url.pathname !== "/token" &&
+          url.pathname !== "/callback" &&
+          url.pathname !== "/register"
+        ) {
+          // Validate token audience for this resource
+          const isValidAudience = await validateTokenAudience(
+            accessToken,
+            origin,
+            env.ENCRYPTION_SECRET
+          );
 
-        const userData = await userDO.getUserByAccessToken(accessToken);
+          if (!isValidAudience) {
+            if (config?.isLoginRequired) {
+              const isBrowser = request.headers
+                .get("accept")
+                ?.includes("text/html");
+              const resourceMetadataUrl = `${origin}/.well-known/oauth-protected-resource`;
+              const loginUrl = `${origin}/authorize?redirect_to=${encodeURIComponent(
+                request.url
+              )}`;
 
-        if (userData) {
-          user = userData.user as unknown as XUser;
-          registered = true;
-          xAccessToken = userData.xAccessToken;
+              return new Response(
+                JSON.stringify({
+                  error: "invalid_token",
+                  error_description: "Token not valid for this resource",
+                }),
+                {
+                  status: isBrowser ? 302 : 401,
+                  headers: {
+                    ...(isBrowser && { Location: loginUrl }),
+                    "X-Login-URL": loginUrl,
+                    "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
+                  },
+                }
+              );
+            }
+            // If login not required, continue without user
+          } else {
+            // Token is valid for this audience, proceed with user data
+            // Decrypt access token to get user_id
+            if (!accessToken.startsWith("simple_")) {
+              throw new Error("Invalid access token format");
+            }
+
+            const encryptedData = accessToken.substring(7);
+            const decryptedData = await decrypt(
+              encryptedData,
+              env.ENCRYPTION_SECRET
+            );
+            const [userId] = decryptedData.split(";");
+
+            // Get user data from Durable Object using user_id
+            userDO = getMultiStub(
+              env.UserDO,
+              [
+                { name: `${USER_DO_PREFIX}${userId}` },
+                { name: `${USER_DO_PREFIX}aggregate:` },
+              ],
+              ctx
+            );
+
+            // Update activity before getting user data (except for /me endpoint which handles it separately)
+            if (url.pathname !== "/me") {
+              await userDO.updateActivity(accessToken);
+            }
+
+            const userData = await userDO.getUserByAccessToken(accessToken);
+
+            if (userData) {
+              user = userData.user as unknown as XUser;
+              registered = true;
+              xAccessToken = userData.xAccessToken;
+            }
+          }
         }
       } catch (error) {
         console.error("Error getting user data:", error);
@@ -1553,20 +1720,20 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
 
     if (!user && config?.isLoginRequired) {
       const isBrowser = request.headers.get("accept")?.includes("text/html");
-      const url = new URL(request.url);
-      const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
+      const origin = getOrigin(request, env);
+      const resourceMetadataUrl = `${origin}/.well-known/oauth-protected-resource`;
 
       // Require login
-      const loginUrl = `${
-        url.origin
-      }/authorize?redirect_to=${encodeURIComponent(request.url)}`;
+      const loginUrl = `${origin}/authorize?redirect_to=${encodeURIComponent(
+        request.url
+      )}`;
 
       return new Response(
-        `"access_token" Cookie or "Authorization" header required. User must login at ${Location}.`,
+        `"access_token" Cookie or "Authorization" header required. User must login at ${loginUrl}.`,
         {
           status: isBrowser ? 302 : 401,
           headers: {
-            Location: loginUrl,
+            ...(isBrowser && { Location: loginUrl }),
             "X-Login-URL": loginUrl,
             // MCP Required: WWW-Authenticate header with resource metadata URL (RFC9728)
             "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
