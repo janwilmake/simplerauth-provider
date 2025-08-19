@@ -22,7 +22,10 @@ Instead of `Do you grant access to {name}?` the oauth provider can now say `Do y
 
 Problem solved! I call it the "Domain-as-client-ID principle".
 
-A very interesting property of Domain-as-client-ID, is that any third party server can now do things on behalf of the user, as long as the user approves that. In essence, the user gets full control to give access to their account to anyone else if they so desire. Because, why not?
+The Domain-as-client-ID principle has some interesting effects:
+
+1. Any server can now integrate with your app without friction (as long as the user approves)
+2. Any of your future apps can use the provider without having the friction of setting up a secret
 
 Imagine a world now where every service did things like this. It would greatly simplify oauth and any app would immediately be able to ask for access to thousands of applications. As long as the user grants the client access to their other services, they can do stuff. This removes a ton of friction, and especially when we have intelligent clients in the age of AI, it's much needed.
 
