@@ -731,7 +731,23 @@ async function handleMe(
 
     const encryptedData = accessToken.substring(7);
     const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
-    const [userId] = decryptedData.split(";");
+    const [userId, clientId, resource, xAccessToken] = decryptedData.split(";");
+
+    if (resource !== url.origin) {
+      return new Response(
+        JSON.stringify({
+          error: "invalid_token",
+          error_description: "Token not issued for this resource",
+        }),
+        {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+            "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
+          },
+        }
+      );
+    }
 
     // Get user data from Durable Object using user_id
     const userDO = getMultiStub(
@@ -1304,21 +1320,6 @@ export function getAccessToken(request: Request): string | null {
   // Fallback to cookie for browser clients
   const cookies = parseCookies(request.headers.get("Cookie") || "");
   return cookies.access_token || null;
-}
-
-/**
- * Validate that an access token is intended for this resource server.
- * MCP servers MUST validate token audience.
- */
-export function validateTokenAudience(
-  request: Request,
-  expectedResource: string
-): boolean {
-  // For this simple implementation, we assume tokens encrypted with our secret
-  // are valid for our resource. In a production system, you would decode
-  // the token and check the 'aud' claim or resource parameter.
-  const token = getAccessToken(request);
-  return token !== null;
 }
 
 // Utility functions
