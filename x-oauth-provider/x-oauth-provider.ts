@@ -1108,7 +1108,7 @@ async function handleToken(
     return new Response(
       JSON.stringify({
         error: "invalid_grant",
-        message: `Invalid resource: ${resource}. we wanted: ${authData.resource}`,
+        message: `Invalid resource`,
       }),
       { status: 400, headers }
     );
