@@ -1,6 +1,6 @@
 ---
 title: "Creating integrations for your startup. Lessons learned building 'Login with Parallel'"
-description: "In this I walk you through the process of making our developer product more accessible. The key is building an oauth provider, and "
+description: "In this I walk you through the process of making our developer product more accessible. The key to accessibility is integrations. The key to integrations is building an easy to use oauth provider."
 date: 2025-08-20
 author: "Jan Wilmake"
 tags:
