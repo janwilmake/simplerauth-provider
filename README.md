@@ -1,14 +1,12 @@
-**SimplerAuth Provider** allows for zero-config X OAuth for all your applications and downstream clients.
+# SimplerAuth Provider - Zero-Config OAuth Clients & Providers
 
-# Why
+> Please note: This repo consists of many smaller modules that can be used independently
+>
+> Be advised: While some are stable and of high-quality, others are in active development and may still be buggy.
 
-- X Free or Basic just allows creating a single client
-- A single client can have up to just 10 callback URLs, which limits you in how many apps you can create
-- To bypass this problem, you can use the `simplerauth-client` to create unlimited X Authed Apps (even without a client)
+# Features [simplerauth-client](simplerauth-client/)
+
 - Wrap your fetch handler with `withSimplerAuth(handler,config)` and you'll have access to `ctx.user`. That's literally it!
-
-# Features
-
 - **Secretless** - no secrets needed due to the 'hostname as client-id' principle.
 - **Stateless** - no state needed since every user gets their own tiny DB in the provider, yielding super high performance
 - **Self-hostable** - Works with login.wilmake.com by default, but you can also host your own X OAuth Provider and configure that.
@@ -16,15 +14,15 @@
 
 # Security
 
-You can prompt the sourcecode on security, and see it's rated quite well by claude
+One of the design goals of Simpler Auth is to be fully compliant with [the MCP Authorization spec](https://modelcontextprotocol.io/specification/draft/basic/authorization) and to follow their [security best practices](https://modelcontextprotocol.io/specification/draft/basic/security_best_practices).
+
+You can prompt the source code on security, and see it's rated quite well by Claude:
 
 [![](https://b.lmpify.com)](https://letmeprompt.com/rules-httpsuithu-ynxf1f0)
 
 # Usage
 
-You can use this client by 'Wilmake Systems', that is hosted at https://login.wilmake.com, with very easy set-up.
-
-This is how the OAuth flow looks when using the hosted setup:
+By default the `simplerauth-client` connects to an X Client named 'Wilmake Systems' that is hosted at https://login.wilmake.com. This is how the OAuth flow looks when using the hosted setup:
 
 ![](hosted.png)
 

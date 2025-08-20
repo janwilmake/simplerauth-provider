@@ -4,6 +4,12 @@
 
 This X OAuth Provider uses the client's domain name as the client_id and automatically derives it from the `redirect_uri` (e.g., `https://example.com/callback` means `client_id` must equal `example.com`), eliminating the need for client registration while maintaining security through domain validation.
 
+**Why**
+
+- X Free or Basic just allows creating a single client
+- A single client can have up to just 10 callback URLs, which limits you in how many apps you can create
+- To bypass this problem, you can use the `simplerauth-client` to create unlimited X Authed Apps (even without a client)
+
 **Key Features:**
 
 - Makes your worker a oauth provider

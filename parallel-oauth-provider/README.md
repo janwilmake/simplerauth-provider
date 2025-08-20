@@ -10,8 +10,3 @@ Context - https://github.com/janwilmake/simplerauth-provider
 
 - Get verified X user
 - Just like Cloudflare Simplerauth, have dialog to to select or add API key, which will provide it back there
-
-# Actionable Steps Now
-
-1. Improve https://github.com/janwilmake/simplerauth.cloudflare (rename cloudflare-oauth-provider or login-with-cloudflare) based on https://github.com/janwilmake/simplerauth-provider
-2. Remix that into 'login-with-parallel' library
