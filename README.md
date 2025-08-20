@@ -61,6 +61,8 @@ OAuth is the status quo for SSO logins, but the ill adoption of its full specifi
 
 ![](stacked-oauth-providers.drawio.png)
 
+As you can see in this illustration, first, Simpler Auth proxies legacy OAuth providers into an agent-friendly oauth provider proxy, [x-oauth-provider](x-oauth-provider) being the first. With that, apps can use [simplerauth-client](simplerauth-client/) directly to connect to a hosted oauth provider, or build it out into a "Simpler Auth Composition" that adds additional functionality into the oauth flow.
+
 The goal of Simpler Auth is to make it easy for any application you're building to not only use oauth for SSO, but also immediately offer OAuth with your app itself to third party client servers, because in the world of agents, the browser is not the only way users use apps anymore. We need OAuth Provided apps out of the box!
 
 Modular and Composable - or "stackable" - auth allows easy creation of oauth provider flows to grant specific scopes or keys, and allows experimentation with new auth flow paradigms: What about an agentic authorization layer for Github repo metadata editing? Or a more fine-grained scoping for cloudflare workers to only allow for editing staging workers?
