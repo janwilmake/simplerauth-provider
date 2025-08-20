@@ -10,7 +10,11 @@ In the end, the API product of Parallel is most important to be of high quality,
 
 # Why 'Login with Parallel'?
 
-So this is the main reason that naturally led me to OAuth. Because building an integration that uses the API of Parallel isx one thing, but having that integration be easy to use takes more than just doing a 1:1 mapping with the APIs to some SDK. The crux to accessibility in most cases for GOOD integrations, in my humble opinion, is most definitely creating an OAuth Provider.
+So this is the main reason that naturally led me to OAuth. Because building an integration that uses the API of Parallel is one thing, but having that integration be easy to use takes more than just doing a 1:1 mapping with the APIs to some SDK. The crux to accessibility in most cases for GOOD integrations, in my humble opinion, is most definitely creating an OAuth Provider.
+
+## Ease of use
+
+I'll demonstrate the ease of use with the a few examples
 
 **Example 1: Claude MCPs**
 
@@ -64,6 +68,10 @@ Now, imagine we could simplify the flow to this:
 3. Login with Parallel, select desired key
 
 See the difference?
+
+## Other benefits
+
+I could continue myself, but Claude also summarized it nicely; other benefits include enabling enterprise adoption, audit trails, marketplace integrations, creating mobile apps, GitHub CI, and many other things. [If you're not convinced yet, check it out](https://letmeprompt.com/this-is-a-blog-inten-a2x0360)!
 
 All in all, it seems most logical for me to first unlock having such an oauth flow available, and make it super easy for developers to use it. Creating 'Login with Parallel' functionality will enable any developer to use it within third party agents platforms, no-code platforms, or even in their own apps.
 
