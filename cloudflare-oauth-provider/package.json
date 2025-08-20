@@ -1,0 +1,12 @@
+{
+  "name": "login-with-cloudflare",
+  "version": "1.0.1",
+  "description": "OAuth provider for Cloudflare API keys",
+  "main": "mod.ts",
+  "files": [
+    "mod.ts"
+  ],
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0"
+  }
+}

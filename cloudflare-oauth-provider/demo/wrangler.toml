@@ -1,0 +1,13 @@
+name = "cloudflare-login-demo"
+main = "demo.ts"
+compatibility_date = "2025-07-01"
+route.custom_domain = true
+route.pattern = "demo-cloudflare.simplerauth.com"
+
+[[durable_objects.bindings]]
+name = "AuthProvider"
+class_name = "AuthProvider"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AuthProvider"]

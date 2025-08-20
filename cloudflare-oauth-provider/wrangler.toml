@@ -1,0 +1,24 @@
+name = "login-with-cloudflare"
+main = "main.ts"
+compatibility_date = "2025-06-18"
+assets.directory = "./"
+
+routes = [
+  { pattern = "cloudflare.simplerauth.com", custom_domain = true }
+]
+
+[[durable_objects.bindings]]
+name = "CodeDO"
+class_name = "CodeDO"
+
+[[durable_objects.bindings]]
+name = "UserDO"
+class_name = "UserDO"
+
+[[migrations]]
+new_sqlite_classes = ["CodeDO"]
+tag = "v1"
+
+[[migrations]]
+new_sqlite_classes = ["UserDO"]
+tag = "v2"
