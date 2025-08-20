@@ -20,7 +20,7 @@ Now imagine integrating a custom app that uses the Parallel API with [ChatGPT GP
 
 ![](gpts.png)
 
-The problem? This doesn't allow to have different API keys for different users. Not possible! We need oauth for that, so other apps can make requests to the parallel APIs on behalf of users.
+The problem? This doesn't allow to have different API keys for different users. Not possible! Every user needs to go through this tiresome process of creating their own GPTs, but they can't use GPTs that others built, because they would never share it if it uses their own Parallel API key. To make it possible to share, we need oauth, so other apps can make requests to the parallel APIs on behalf of users.
 
 Now imagine a developer that uses Zapier and wants to build an integration with Parallel. The best he can do right now would be creating an integration where the end-user of the integration needs to:
 
