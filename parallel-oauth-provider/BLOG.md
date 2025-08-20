@@ -1,4 +1,30 @@
-# Building 'Login with Parallel'
+---
+title: "Creating integrations for your startup. Lessons learned building 'Login with Parallel'"
+description: "In this I walk you through the process of making our developer product more accessible. The key is building an oauth provider, and "
+date: 2025-08-20
+author: "Jan Wilmake"
+tags:
+  - oauth
+  - mcp
+  - integrations
+  - developer experience
+categories:
+  - Programming
+slug: "building-login-with-parallel"
+draft: true
+og:
+  image: og.png
+  type: article
+  image:width: 1200
+  image:height: 630
+twitter:
+  card: "summary_large_image"
+  creator: "@janwilmake"
+seo:
+  robots: "index,follow"
+---
+
+# Creating integrations for your startup - Building 'Login with Parallel'
 
 Since a few weeks I've been working with the team at [Parallel Web Systems](https://parallel.ai) to improve their DX and inspire others to build with Parallel. A few weeks after I started, after 1.5 years of building with early customers, Parallel [launched publicly](https://parallel.ai/blog/introducing-parallel). Their APIs show a new direction for generative AI that I'm very excited about: lowering the bar for high-quality data generation by researching the web agenticly, at scale.
 
