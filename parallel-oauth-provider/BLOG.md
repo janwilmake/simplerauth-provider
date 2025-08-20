@@ -1,4 +1,4 @@
-# Building 'login with Parallel'
+# Building 'Login with Parallel'
 
 Since a few weeks I've been working with the team at [Parallel Web Systems](https://parallel.ai) to improve their DX and inspire others to build with Parallel. A few weeks after I started, after 1.5 years of building with early customers, Parallel [launched publicly](https://parallel.ai/blog/introducing-parallel). Their APIs show a new direction for generative AI that I'm very excited about: lowering the bar for high-quality data generation by researching the web agenticly, at scale.
 
@@ -8,19 +8,25 @@ What is a good strategy for building integrations? Should we build all these int
 
 In the end, the API product of Parallel is most important to be of high quality, if that's the case, others will want to build integrations. We just gotta enable them!
 
-# Why 'login with Parallel'?
+# Why 'Login with Parallel'?
 
 So this is the main reason that naturally led me to OAuth. Because building an integration that uses the API of Parallel isx one thing, but having that integration be easy to use takes more than just doing a 1:1 mapping with the APIs to some SDK. The crux to accessibility in most cases for GOOD integrations, in my humble opinion, is most definitely creating an OAuth Provider.
+
+**Example 1: Claude MCPs**
 
 For example, imagine a developer is interested in the [Parallel Search MCP](https://parallel.ai/blog/search-mcp-server) for daily use, or to make an integration with their own AI app. First he/she wants to test it: They use [Claude](https://claude.ai) day to day and want to add it there to see the responsiveness and quality on their intended usecase. As of now, this isn't even possible! Claude only works with MCPs that have OAuth.
 
 ![](ant-claude.png)
+
+**Example 2: ChatGPT GPTs**
 
 Now imagine integrating a custom app that uses the Parallel API with [ChatGPT GPTs](https://chatgpt.com/gpts). When adding an action, it looks like this:
 
 ![](oai-gpts.png)
 
 The problem? This doesn't allow to have different API keys for different users. Not possible! Every user needs to go through this tiresome process of creating their own GPTs, but they can't use GPTs that others built, because they would never share it if it uses their own Parallel API key. To make it possible to share, we need oauth, so other apps can make requests to the parallel APIs on behalf of users.
+
+**Example 3: Automations with Zapier**
 
 Now imagine a developer that uses Zapier and wants to build an integration with Parallel. The best he can do right now would be creating an integration where the end-user of the integration needs to:
 
@@ -38,4 +44,31 @@ However, Zapier also [supports Oauth](https://docs.zapier.com/platform/build/oau
 
 This is a huge difference in end-user user-experience, and for external developers, it's currently not possible to build such an expeirience.
 
+**Example 4: Trying out a Recipe**
+
+Last but not least; imagine a developer curious to try out Parallel. He finds [one of the recipes I recently built](https://github.com/janwilmake/parallel-tasks-sse) and wants to run it locally to try and make some changes. They haven't used Parallel before but are eager to give it a go.
+
+Now, the flow would be:
+
+1. See a tweet or blogpost and find the recipe
+2. Clone it and run locally
+3. See a key is missing so they have to get it first
+4. Sign up to Parallel
+5. Navigate to settings -> api keys. Copy a key
+6. Create a `.env` file and paste the key there.
+
+Now, imagine we could simplify the flow to this:
+
+1. See a tweet or blogpost and find the recipe
+2. Clone it and run locally. As part of the `npm install` script, it runs `npx parallel-setup` which opens the oauth flow
+3. Login with Parallel, select desired key
+
+See the difference?
+
 All in all, it seems most logical for me to first unlock having such an oauth flow available, and make it super easy for developers to use it. Creating 'Login with Parallel' functionality will enable any developer to use it within third party agents platforms, no-code platforms, or even in their own apps.
+
+# Building 'Login with Parallel' - how to do it right?
+
+To be continued!
+
+A big part of it has a huge overlap with the learnings I made building Simpler Auth and [Universal MCP OAuth](https://github.com/janwilmake/universal-mcp-oauth). Check them out!
