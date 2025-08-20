@@ -65,4 +65,10 @@ As you can see in this illustration, first, Simpler Auth proxies legacy OAuth pr
 
 The goal of Simpler Auth is to make it easy for any application you're building to not only use oauth for SSO, but also immediately offer OAuth with your app itself to third party client servers, because in the world of agents, the browser is not the only way users use apps anymore. We need OAuth Provided apps out of the box!
 
-Modular and Composable - or "stackable" - auth allows easy creation of oauth provider flows to grant specific scopes or keys, and allows experimentation with new auth flow paradigms: What about an agentic authorization layer for Github repo metadata editing? Or a more fine-grained scoping for cloudflare workers to only allow for editing staging workers?
+Modular and Composable - or "stackable" - auth allows easy creation of oauth provider flows to grant specific scopes or keys, and allows experimentation with new auth flow paradigms: What about...
+
+- an agentic authorization layer for Github repo metadata editing?
+- a more fine-grained scoping for cloudflare workers to only allow for editing staging workers?
+- a login flow that allows passing LLM provider API keys to a small app?
+
+There's tons of ways in which we can make apps more accessible for AI and with Simpler Auth, we're uncovering this new topic that should be a primitive out of the box for most apps, but isn't.
