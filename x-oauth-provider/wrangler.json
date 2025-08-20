@@ -7,6 +7,10 @@
     {
       "custom_domain": true,
       "pattern": "login.wilmake.com"
+    },
+    {
+      "custom_domain": true,
+      "pattern": "x.wilmake.com"
     }
   ],
   "main": "main.ts",

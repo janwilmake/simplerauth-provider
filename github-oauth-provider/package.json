@@ -1,8 +1,15 @@
 {
-  "name": "simplerauth-github-provider",
-  "version": "0.0.5",
+  "name": "github-oauth-provider",
+  "version": "0.0.1",
   "files": [
-    "github-oauth-client-provider.ts"
+    "github-oauth-provider.ts"
   ],
-  "main": "github-oauth-client-provider.ts"
+  "main": "github-oauth-provider.ts",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250813.0"
+  },
+  "dependencies": {
+    "multistub": "^0.0.8",
+    "queryable-object": "^0.0.8"
+  }
 }

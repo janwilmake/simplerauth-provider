@@ -1,13 +1,14 @@
-name = "github-oauth-client-provider-test"
+name = "simplerauth-github"
 compatibility_date = "2025-06-18"
 route.custom_domain = true
-route.pattern = "github-provider.simplerauth.com"
-main="decorator-demo.ts"
+route.pattern = "gh.simplerauth.com"
+main="main.ts"
 assets.directory = "./public"
+
 [[durable_objects.bindings]]
-name = "CODES"
-class_name = "CodeDO"
+name = "UserDO"
+class_name = "UserDO"
 
 [[migrations]]
-new_sqlite_classes = ["CodeDO"]
+new_sqlite_classes = ["UserDO"]
 tag = "v1"
