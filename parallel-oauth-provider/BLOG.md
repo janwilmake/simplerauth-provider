@@ -72,9 +72,9 @@ However, Zapier also [supports Oauth](https://docs.zapier.com/platform/build/oau
 2. login with parallel (login with google first, then select an API key from available keys) and grant Zapier access.
 3. done
 
-This is a huge difference in end-user user-experience, and for external developers, it's currently not possible to build such an expeirience.
+Other no-code and low-code platforms such as [Make](https://make.com), [n8n](https://n8n.io), etc, all work in similar ways. This is a huge difference in end-user user-experience, and for external developers, it's currently not possible to build such an expeirience.
 
-**Example 4: Trying out a Recipe**
+**Example 4: Trying out a Github repo using Parallel's API**
 
 Last but not least; imagine a developer curious to try out Parallel. He finds [one of the recipes I recently built](https://github.com/janwilmake/parallel-tasks-sse) and wants to run it locally to try and make some changes. They haven't used Parallel before but are eager to give it a go.
 
