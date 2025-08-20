@@ -77,8 +77,6 @@ All in all, it seems most logical for me to first unlock having such an oauth fl
 
 # Building 'Login with Parallel' - how to do it right?
 
-To be continued!
-
 A big part of it has a huge overlap with the learnings I made building Simpler Auth and [Universal MCP OAuth](https://github.com/janwilmake/universal-mcp-oauth). Check them out!
 
 Decisions made that I'll discuss here:
@@ -86,3 +84,7 @@ Decisions made that I'll discuss here:
 - The 'hostname-as-client-id' Principle, removing need for (dynamic) client registration
 - Making it fully MCP compliant. The obstacles and how they're overcome
 - First creating a external oauth flow, to later be replaced with one that fully integrates with Parallel's internal API
+- Cross-client permissiveness
+- How to shape the dialog?
+
+To be continued!
