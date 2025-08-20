@@ -108,7 +108,7 @@ A big part of it has a huge overlap with the learnings I made building Simpler A
 Decisions made that I'll discuss here:
 
 - The 'hostname-as-client-id' Principle, removing need for (dynamic) client registration
-- Making it fully MCP compliant. The obstacles and how they're overcome
+- The landscape and state of oauth, and the decision of making it fully MCP compliant. The obstacles and how they're overcome
 - First creating a external oauth flow, to later be replaced with one that fully integrates with Parallel's internal API
 - Cross-client permissiveness
 - How to shape the dialog?
