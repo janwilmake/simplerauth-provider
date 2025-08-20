@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>OAuth Client Demo</title>
+</head>
+
+<body>
+    <h1>OAuth Client Demo</h1>
+    <div id="content">
+        <p>Loading...</p>
+    </div>
+
+    <script>
+        const OAUTH_PROVIDER = 'https://github-provider.simplerauth.com';
+        const CLIENT_ID = window.location.hostname; // Use current domain as client_id
+
+        async function init() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+
+            if (code) {
+                // Exchange code for token
+                await exchangeCodeForToken(code);
+                // Clean up URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                await showUserInfo(token);
+            } else {
+                showLoginButton();
+            }
+        }
+
+        async function exchangeCodeForToken(code) {
+            try {
+                const response = await fetch(`${OAUTH_PROVIDER}/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        code: code,
+                        client_id: CLIENT_ID,
+                        redirect_uri: window.location.origin + '/provider'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.access_token) {
+                    localStorage.setItem('access_token', data.access_token);
+                }
+            } catch (error) {
+                console.error('Token exchange failed:', error);
+            }
+        }
+
+        async function showUserInfo(token) {
+            try {
+                const response = await fetch('https://api.github.com/user', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'User-Agent': 'OAuth-Client-Demo'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch user info');
+                }
+
+                const user = await response.json();
+                document.getElementById('content').innerHTML = `
+                    <p>Welcome, ${user.name || user.login}!</p>
+                    <img src="${user.avatar_url}" alt="Avatar" width="50" height="50">
+                    <p>Username: ${user.login}</p>
+                    <p>Email: ${user.email || 'Private'}</p>
+                    <button onclick="logout()">Logout</button>
+                `;
+            } catch (error) {
+                console.error('Failed to fetch user info:', error);
+                showLoginButton();
+            }
+        }
+
+        function showLoginButton() {
+            document.getElementById('content').innerHTML = `
+                <p>You are not logged in.</p>
+                <button onclick="login()">Login with GitHub</button>
+            `;
+        }
+
+        function login() {
+            const authUrl = new URL(`${OAUTH_PROVIDER}/authorize`);
+            authUrl.searchParams.set('client_id', CLIENT_ID);
+            authUrl.searchParams.set('redirect_uri', window.location.origin + '/provider');
+            authUrl.searchParams.set('response_type', 'code');
+            authUrl.searchParams.set('state', Math.random().toString(36));
+
+            window.location.href = authUrl.toString();
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            showLoginButton();
+        }
+
+        init();
+
+    </script>
+</body>
+
+</html>

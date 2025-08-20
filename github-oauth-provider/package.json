@@ -1,0 +1,8 @@
+{
+  "name": "simplerauth-github-provider",
+  "version": "0.0.5",
+  "files": [
+    "github-oauth-client-provider.ts"
+  ],
+  "main": "github-oauth-client-provider.ts"
+}
