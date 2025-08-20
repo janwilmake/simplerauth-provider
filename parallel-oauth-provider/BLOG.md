@@ -1,0 +1,41 @@
+# Building 'login with Parallel'
+
+Since a few weeks I've been working with the team at [Parallel Web Systems](https://parallel.ai) to improve their DX and inspire others to build with Parallel. A few weeks after I started, after 1.5 years of building with early customers, Parallel [launched publicly](https://parallel.ai/blog/introducing-parallel). Their APIs show a new direction for generative AI that I'm very excited about: lowering the bar for high-quality data generation by researching the web agenticly, at scale.
+
+One of my goals is to improve accessibility to Parallel. Their API is very well built and documented, but there aren't many third party apps that integrate with Parallel yet. When I started working with them, the team shared me a document with potential integrations we can create. Platforms like [n8n](https://n8n.io), [poe](https://poe.com), [Composio](https://composio.dev), [LangChain](https://langchain.com), [Zapier](https://zapier.com], and [CrewAI](https://crewai.com) would all benefit from having an integration with Parallel, and Parallel would be adopted faster.
+
+What is a good strategy for building integrations? Should we build all these integrations ourselves? I don't think so, let me explain why. First of all, it feels unauthentic building out integrations for platforms that I don't use myself, that I don't even know anyone from building or using it. This is a problem. Secondly, there's a lot of boilerplate for each of these integrations that I feel like can be shared because it is required for each. That's why, naturally I felt like we should focus on making making integrations easier, so that ultimately, rather than having to make all integrations ourselves, the community would be able to build and maintain these third party integrations themselves.
+
+In the end, the API product of Parallel is most important to be of high quality, if that's the case, others will want to build integrations. We just gotta enable them!
+
+# Why 'login with Parallel'?
+
+So this is the main reason that naturally led me to OAuth. Because building an integration that uses the API of Parallel isx one thing, but having that integration be easy to use takes more than just doing a 1:1 mapping with the APIs to some SDK. The crux to accessibility in most cases for GOOD integrations, in my humble opinion, is most definitely creating an OAuth Provider.
+
+For example, imagine a developer is interested in the [Parallel Search MCP](https://parallel.ai/blog/search-mcp-server) for daily use, or to make an integration with their own AI app. First he/she wants to test it: They use [Claude](https://claude.ai) day to day and want to add it there to see the responsiveness and quality on their intended usecase. As of now, this isn't even possible! Claude only works with MCPs that have OAuth.
+
+![](claude.png)
+
+Now imagine integrating a custom app that uses the Parallel API with [ChatGPT GPTs](https://chatgpt.com/gpts). When adding an action, it looks like this:
+
+![](gpts.png)
+
+The problem? This doesn't allow to have different API keys for different users. Not possible! We need oauth for that, so other apps can make requests to the parallel APIs on behalf of users.
+
+Now imagine a developer that uses Zapier and wants to build an integration with Parallel. The best he can do right now would be creating an integration where the end-user of the integration needs to:
+
+1. click 'add integration'
+2. register to parallel
+3. find settings and the default api key
+4. copy it
+5. paste in the integration dialog, and continue
+
+However, Zapier also [supports Oauth](https://docs.zapier.com/platform/build/oauth). With OAuth, an end user using Parallel in their automation would have a much better flow:
+
+1. click 'add integration'
+2. login with parallel (login with google first, then select an API key from available keys) and grant Zapier access.
+3. done
+
+This is a huge difference in end-user user-experience, and for external developers, it's currently not possible to build such an expeirience.
+
+All in all, it seems most logical for me to first unlock having such an oauth flow available, and make it super easy for developers to use it. Creating 'Login with Parallel' functionality will enable any developer to use it within third party agents platforms, no-code platforms, or even in their own apps.

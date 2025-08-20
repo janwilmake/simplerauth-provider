@@ -3,7 +3,6 @@ compatibility_date = "2025-06-18"
 route.custom_domain = true
 route.pattern = "gh.simplerauth.com"
 main="main.ts"
-assets.directory = "./public"
 
 [[durable_objects.bindings]]
 name = "UserDO"
