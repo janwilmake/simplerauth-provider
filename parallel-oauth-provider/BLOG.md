@@ -14,11 +14,11 @@ So this is the main reason that naturally led me to OAuth. Because building an i
 
 For example, imagine a developer is interested in the [Parallel Search MCP](https://parallel.ai/blog/search-mcp-server) for daily use, or to make an integration with their own AI app. First he/she wants to test it: They use [Claude](https://claude.ai) day to day and want to add it there to see the responsiveness and quality on their intended usecase. As of now, this isn't even possible! Claude only works with MCPs that have OAuth.
 
-![](claude.png)
+![](ant-claude.png)
 
 Now imagine integrating a custom app that uses the Parallel API with [ChatGPT GPTs](https://chatgpt.com/gpts). When adding an action, it looks like this:
 
-![](gpts.png)
+![](oai-gpts.png)
 
 The problem? This doesn't allow to have different API keys for different users. Not possible! Every user needs to go through this tiresome process of creating their own GPTs, but they can't use GPTs that others built, because they would never share it if it uses their own Parallel API key. To make it possible to share, we need oauth, so other apps can make requests to the parallel APIs on behalf of users.
 
