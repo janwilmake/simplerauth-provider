@@ -93,6 +93,11 @@ Now, imagine we could simplify the flow to this:
 2. Clone it and run locally. As part of the `npm install` script, it runs `npx parallel-setup` which opens the oauth flow
 3. Login with Parallel, select desired key
 
+Or even easier, what if the app itself has 'login with Parallel'?:
+
+1. See a tweet or blogpost and check out the demo
+2. 'Login with Parallel' to try it out with your own API key
+
 See the difference?
 
 <!-- why subject the user to all these complications when the oauth protocol beautifully solves it for us? -->
