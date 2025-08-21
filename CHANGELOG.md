@@ -59,7 +59,3 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
   - ✅ Fix resource audience validation in provider: https://letmeprompt.com/rules-httpsuithu-nwbujx0
   - ✅ Also hold my implementation against https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices
   - ✅ Put a LMPIFY prompt in readme that shows it's all good.
-
-# Fix security encryption
-
-https://x.com/wgw_eth/status/1957840161263268344
