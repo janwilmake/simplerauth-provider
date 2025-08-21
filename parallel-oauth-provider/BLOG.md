@@ -95,6 +95,8 @@ Now, imagine we could simplify the flow to this:
 
 See the difference?
 
+<!-- why subject the user to all these complications when the oauth protocol beautifully solves it for us? -->
+
 ## Other benefits
 
 I could continue myself, but Claude also summarized it nicely; other benefits include enabling enterprise adoption, audit trails, marketplace integrations, creating mobile apps, GitHub CI, and many other things. [If you're not convinced yet, check it out](https://letmeprompt.com/this-is-a-blog-inten-a2x0360)!

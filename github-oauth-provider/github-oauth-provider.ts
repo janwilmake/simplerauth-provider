@@ -131,7 +131,7 @@ export class UserDO extends DurableObject {
     this.sql.exec(
       `INSERT OR REPLACE INTO users 
        (user_id, login, name, avatar_url, github_access_token, updated_at, last_active_at, session_count, additional_data)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT session_count FROM users WHERE user_id = ?), 1), ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT session_count FROM users WHERE user_id = ?), 1), ?)`,
       id.toString(),
       login,
       name,

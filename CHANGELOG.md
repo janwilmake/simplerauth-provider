@@ -63,19 +63,3 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
 # Fix security encryption
 
 https://x.com/wgw_eth/status/1957840161263268344
-
-## Bonus
-
-- Make it a `flaredream build` module that removes it from worker-custom code while still allowing for `wrangler dev`. More work required to allow for packages (can hardcode speicific single-file ones maybe, at first, to skip bundling still)
-- Add it to `system[-ts].md`. Can even be without being a module for now, just package and proper buildscript and main entry should be configured.
-- Flaredream: When logged in, connect durable-worker with user-DO.
-- Stripeflare must take user-ID and must be able to have metadata for payment callback with custom logic per metadata. May need different boundary.
-- For admin, also expose `/query` and MCP for that
-- Also expose `llms.txt` and `openapi.json` for the provider.
-- Other modules (flaredream)
-  - Stripeflare module
-  - Toolflare module
-
-All in all this will allow super easy paid app creation, perfect to promote parallel
-
-https://github.com/janwilmake/openapi-to-mcp

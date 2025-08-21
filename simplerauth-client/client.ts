@@ -21,7 +21,7 @@ interface UserFetchHandler<TEnv = {}> {
   (request: Request, env: TEnv, ctx: UserContext): Response | Promise<Response>;
 }
 
-interface SimplerAuthConfig {
+export interface SimplerAuthConfig {
   /** If true, login will be forced and user will always be present */
   isLoginRequired?: boolean;
   /** OAuth scopes to request */
