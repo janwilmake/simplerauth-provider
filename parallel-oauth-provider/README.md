@@ -6,7 +6,7 @@
 
 Context - https://github.com/janwilmake/simplerauth-provider
 
-# Faster intermediate way to do it (that doesn't require their approval first)
+# Faster intermediate way to do it (that doesn't require internal access - meaning it can be a fully community-based provider)
 
 - Get verified X user
 - Just like Cloudflare Simplerauth, have dialog to to select or add API key, which will provide it back there.
