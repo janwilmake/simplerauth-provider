@@ -211,10 +211,10 @@ export class UserDO extends DurableObject {
     resource: string
   ): Promise<string> {
     // Validate that clientId matches resource hostname
-    const resourceUrl = new URL(resource);
-    if (resourceUrl.hostname !== clientId) {
-      throw new Error("Client ID must match resource hostname");
-    }
+    //const resourceUrl = new URL(resource);
+    // if (resourceUrl.hostname !== clientId) {
+    //   throw new Error("Client ID must match resource hostname");
+    // }
 
     // Get the user's X access token
     const user = this.sql
@@ -378,6 +378,8 @@ export class UserDO extends DurableObject {
         .toArray()[0];
 
       if (!loginResult) {
+        console.log("no login result", { clientId, accessToken, userId });
+
         return null;
       }
 
@@ -387,6 +389,7 @@ export class UserDO extends DurableObject {
         .toArray()[0];
 
       if (!userResult) {
+        console.log("no user result");
         return null;
       }
 
@@ -640,11 +643,11 @@ tag = "v1"
       }
 
       // Extract hosts from all redirect URIs
-      const hosts = new Set();
+      const hostnames = new Set();
       for (const uri of body.redirect_uris) {
         try {
           const url = new URL(uri);
-          hosts.add(url.host);
+          hostnames.add(url.hostname);
         } catch (e) {
           return new Response(
             JSON.stringify({
@@ -663,7 +666,7 @@ tag = "v1"
       }
 
       // Ensure all redirect URIs have the same host
-      if (hosts.size !== 1) {
+      if (hostnames.size !== 1) {
         return new Response(
           JSON.stringify({
             error: "invalid_client_metadata",
@@ -679,7 +682,7 @@ tag = "v1"
         );
       }
 
-      const clientHost = Array.from(hosts)[0];
+      const clientHost = Array.from(hostnames)[0];
 
       // Response with client_id as the host
       const response = {
@@ -812,6 +815,7 @@ async function handleMe(
     const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
     const [userId] = decryptedData.split(";");
 
+    console.log({ userId });
     // Get user data from Durable Object using user_id
     const userDO = getMultiStub(
       env.UserDO,

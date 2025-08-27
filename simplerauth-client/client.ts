@@ -55,11 +55,17 @@ export function withSimplerAuth<TEnv = {}>(
     const path = url.pathname;
 
     // Handle OAuth endpoints
-    if (path === "/.well-known/oauth-authorization-server") {
-      return handleAuthorizationServerMetadata(url, providerHostname);
+    if (
+      path === "/.well-known/oauth-authorization-server" ||
+      path.startsWith("/.well-known/oauth-authorization-server/")
+    ) {
+      return handleAuthorizationServerMetadata(request, providerHostname);
     }
 
-    if (path === "/.well-known/oauth-protected-resource") {
+    if (
+      path === "/.well-known/oauth-protected-resource" ||
+      path.startsWith("/.well-known/oauth-protected-resource/")
+    ) {
       return handleProtectedResourceMetadata(request, env, providerHostname);
     }
 
@@ -149,9 +155,20 @@ export function withSimplerAuth<TEnv = {}>(
 }
 
 function handleAuthorizationServerMetadata(
-  url: URL,
+  request: Request,
   providerHostname: string
 ): Response {
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, MCP-Protocol-Version",
+      },
+    });
+  }
   const metadata = {
     issuer: `https://${providerHostname}`,
     authorization_endpoint: `https://${providerHostname}/authorize`,
@@ -168,6 +185,7 @@ function handleAuthorizationServerMetadata(
     headers: {
       "Content-Type": "application/json",
       "Cache-Control": "public, max-age=3600",
+      "Access-Control-Allow-Origin": "*",
     },
   });
 }
@@ -179,7 +197,17 @@ function handleProtectedResourceMetadata(
 ): Response {
   const url = new URL(request.url);
   const port = env.PORT || 8787;
-
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, MCP-Protocol-Version",
+      },
+    });
+  }
   const resource = isLocalhost(request)
     ? `http://localhost:${port}`
     : `https://${url.host}`;
@@ -195,6 +223,7 @@ function handleProtectedResourceMetadata(
   return new Response(JSON.stringify(metadata, null, 2), {
     headers: {
       "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
       //  "Cache-Control": "public, max-age=3600",
     },
   });
@@ -462,7 +491,8 @@ async function handleToken(
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, MCP-Protocol-Version",
       },
     });
   }
@@ -553,7 +583,8 @@ async function handleMe(
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, MCP-Protocol-Version",
       },
     });
   }
@@ -584,17 +615,17 @@ async function handleMe(
   // Proxy /me requests to the provider
   const providerUrl = `https://${providerHostname}/me`;
 
+  console.log("Checking me at ", { providerUrl, accessToken });
   try {
     const response = await fetch(providerUrl, {
       method: request.method,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     const responseBody = await response.text();
 
     if (!response.ok) {
+      console.log("NOT Kk");
       return new Response(responseBody, {
         status: response.status,
         statusText: response.statusText,
@@ -654,7 +685,8 @@ function handleLogout(request: Request, sameSite: string): Response {
 function getAccessToken(request: Request): string | null {
   // Check Authorization header first (for API clients)
   const authHeader = request.headers.get("Authorization");
-  if (authHeader?.startsWith("Bearer ")) {
+  console.log({ authHeader });
+  if (authHeader?.toLowerCase().startsWith("bearer ")) {
     return authHeader.substring(7);
   }
 
