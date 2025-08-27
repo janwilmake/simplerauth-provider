@@ -39,6 +39,28 @@ const isQueryReadOnly = (query: string) => {
   return query.toLowerCase().startsWith("select ");
 };
 
+// Helper function for CORS headers
+function getCorsHeaders(
+  allowedMethods: string[] = ["GET", "OPTIONS"]
+): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": allowedMethods.join(", "),
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, MCP-Protocol-Version",
+  };
+}
+
+// Helper function for OPTIONS responses
+function handleOptionsRequest(
+  allowedMethods: string[] = ["GET", "OPTIONS"]
+): Response {
+  return new Response(null, {
+    status: 204,
+    headers: getCorsHeaders(allowedMethods),
+  });
+}
+
 @Queryable()
 export class UserDO extends DurableObject {
   private storage: DurableObjectStorage;
@@ -450,6 +472,12 @@ tag = "v1"
   }
 
   if (path === "/admin") {
+    // Handle OPTIONS request
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest(["GET", "POST", "OPTIONS"]);
+    }
+
+    const corsHeaders = getCorsHeaders(["GET", "POST", "OPTIONS"]);
     const accessToken = getAccessToken(request);
     const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
 
@@ -462,6 +490,8 @@ tag = "v1"
         {
           status: 401,
           headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
             "WWW-Authenticate": `Bearer realm="main", resource_metadata="${resourceMetadataUrl}`,
           },
         }
@@ -488,7 +518,10 @@ tag = "v1"
       );
       const userData = await userDO.getUser();
       if (userData?.user?.username !== env.ADMIN_X_USERNAME) {
-        return new Response("Only admin can view DB", { status: 401 });
+        return new Response("Only admin can view DB", {
+          status: 401,
+          headers: corsHeaders,
+        });
       }
 
       const stub = getMultiStub(
@@ -507,12 +540,20 @@ tag = "v1"
         { dangerouslyDisableAuth: true }
       );
     } catch (error) {
-      return new Response("Invalid access token", { status: 401 });
+      return new Response("Invalid access token", {
+        status: 401,
+        headers: corsHeaders,
+      });
     }
   }
 
   // MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)
   if (path === "/.well-known/oauth-authorization-server") {
+    // Handle OPTIONS request
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest();
+    }
+
     const metadata = {
       issuer: url.origin,
       authorization_endpoint: `${url.origin}/authorize`,
@@ -528,6 +569,7 @@ tag = "v1"
 
     return new Response(JSON.stringify(metadata, null, 2), {
       headers: {
+        ...getCorsHeaders(),
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=3600",
       },
@@ -536,6 +578,11 @@ tag = "v1"
 
   // Protected resource metadata endpoint
   if (path === "/.well-known/oauth-protected-resource") {
+    // Handle OPTIONS request
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest();
+    }
+
     const metadata = {
       resource: url.origin,
       authorization_servers: [url.origin],
@@ -546,6 +593,7 @@ tag = "v1"
 
     return new Response(JSON.stringify(metadata, null, 2), {
       headers: {
+        ...getCorsHeaders(),
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=3600",
       },
@@ -553,8 +601,18 @@ tag = "v1"
   }
 
   if (path === "/register") {
+    // Handle OPTIONS request
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest(["POST", "OPTIONS"]);
+    }
+
+    const corsHeaders = getCorsHeaders(["POST", "OPTIONS"]);
+
     if (request.method !== "POST") {
-      return new Response("Method not allowed", { status: 405 });
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: corsHeaders,
+      });
     }
 
     try {
@@ -573,7 +631,10 @@ tag = "v1"
           }),
           {
             status: 400,
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
           }
         );
       }
@@ -592,7 +653,10 @@ tag = "v1"
             }),
             {
               status: 400,
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json",
+              },
             }
           );
         }
@@ -605,7 +669,13 @@ tag = "v1"
             error: "invalid_client_metadata",
             error_description: "All redirect URIs must have the same host",
           }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
         );
       }
 
@@ -623,6 +693,7 @@ tag = "v1"
       return new Response(JSON.stringify(response, null, 2), {
         status: 201,
         headers: {
+          ...corsHeaders,
           "Content-Type": "application/json",
           "Cache-Control": "no-store",
           Pragma: "no-cache",
@@ -636,7 +707,10 @@ tag = "v1"
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
         }
       );
     }
@@ -659,11 +733,17 @@ tag = "v1"
   }
 
   if (path === "/logout") {
+    // Handle OPTIONS request
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest();
+    }
+
     const url = new URL(request.url);
     const redirectTo = url.searchParams.get("redirect_to") || "/";
     return new Response(null, {
       status: 302,
       headers: {
+        ...getCorsHeaders(),
         Location: redirectTo,
         "Set-Cookie": `access_token=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`,
       },
@@ -680,32 +760,23 @@ async function handleMe(
   ctx: ExecutionContext
 ): Promise<Response> {
   const url = new URL(request.url);
+
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      },
-    });
+    return handleOptionsRequest();
   }
+
+  const corsHeaders = getCorsHeaders();
 
   if (request.method !== "GET") {
     return new Response(JSON.stringify({ error: "method_not_allowed" }), {
       status: 405,
       headers: {
+        ...corsHeaders,
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
       },
     });
   }
-
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-  };
 
   const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
   const loginUrl = `${url.origin}/authorize?redirect_to=${encodeURIComponent(
@@ -723,7 +794,8 @@ async function handleMe(
       {
         status: 401,
         headers: {
-          ...headers,
+          ...corsHeaders,
+          "Content-Type": "application/json",
           "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
         },
       }
@@ -764,7 +836,8 @@ async function handleMe(
         {
           status: 401,
           headers: {
-            ...headers,
+            ...corsHeaders,
+            "Content-Type": "application/json",
             "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
           },
         }
@@ -772,7 +845,12 @@ async function handleMe(
     }
 
     // Return user information
-    return new Response(JSON.stringify(userData.user), { headers });
+    return new Response(JSON.stringify(userData.user), {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
   } catch (error) {
     console.error("Error retrieving user data:", error);
     return new Response(
@@ -780,7 +858,13 @@ async function handleMe(
         error: "server_error",
         error_description: "Internal server error",
       }),
-      { status: 500, headers }
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 }
@@ -792,12 +876,18 @@ async function handleAuthorize(
   sameSite: string,
   allowedClients: string[] | undefined
 ): Promise<Response> {
+  // Handle OPTIONS request
+  if (request.method === "OPTIONS") {
+    return handleOptionsRequest();
+  }
+
   const url = new URL(request.url);
   const clientId = url.searchParams.get("client_id");
   let redirectUri = url.searchParams.get("redirect_uri");
   const responseType = url.searchParams.get("response_type") || "code";
   const state = url.searchParams.get("state");
   const resource = url.searchParams.get("resource");
+
   // If no client_id, this is a direct login request
   if (!clientId) {
     const url = new URL(request.url);
@@ -826,6 +916,7 @@ async function handleAuthorize(
     return new Response(null, {
       status: 302,
       headers: {
+        ...getCorsHeaders(),
         Location: xUrl.toString(),
         "Set-Cookie": `oauth_state=${encodeURIComponent(
           stateString
@@ -838,6 +929,7 @@ async function handleAuthorize(
   if (!isValidDomain(clientId) && clientId !== "localhost") {
     return new Response("Invalid client_id: must be a valid domain", {
       status: 400,
+      headers: getCorsHeaders(),
     });
   }
 
@@ -846,7 +938,10 @@ async function handleAuthorize(
       `This provider restricts client_ids that can be used, and ${clientId} is not one of them. Allowed client_ids: ${allowedClients.join(
         ", "
       )}`,
-      { status: 400 }
+      {
+        status: 400,
+        headers: getCorsHeaders(),
+      }
     );
   }
 
@@ -862,22 +957,32 @@ async function handleAuthorize(
     if (redirectUrl.protocol !== "https:" && clientId !== "localhost") {
       return new Response("Invalid redirect_uri: must use HTTPS", {
         status: 400,
+        headers: getCorsHeaders(),
       });
     }
 
     if (redirectUrl.hostname !== clientId) {
       return new Response(
         "Invalid redirect_uri: must be on same origin as client_id",
-        { status: 400 }
+        {
+          status: 400,
+          headers: getCorsHeaders(),
+        }
       );
     }
   } catch {
-    return new Response("Invalid redirect_uri format", { status: 400 });
+    return new Response("Invalid redirect_uri format", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   // Only support authorization code flow
   if (responseType !== "code") {
-    return new Response("Unsupported response_type", { status: 400 });
+    return new Response("Unsupported response_type", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   // Check if user is already authenticated
@@ -941,7 +1046,10 @@ async function handleAuthorize(
   xUrl.searchParams.set("code_challenge", codeChallenge);
   xUrl.searchParams.set("code_challenge_method", "S256");
 
-  const headers = new Headers({ Location: xUrl.toString() });
+  const headers = new Headers({
+    ...getCorsHeaders(),
+    Location: xUrl.toString(),
+  });
   headers.append(
     "Set-Cookie",
     `oauth_state=${encodeURIComponent(
@@ -1000,7 +1108,10 @@ async function createAuthCodeAndRedirect(
 
   return new Response(null, {
     status: 302,
-    headers: { Location: redirectUrl.toString() },
+    headers: {
+      ...getCorsHeaders(),
+      Location: redirectUrl.toString(),
+    },
   });
 }
 
@@ -1012,29 +1123,18 @@ async function handleToken(
 ): Promise<Response> {
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      },
-    });
+    return handleOptionsRequest(["POST", "OPTIONS"]);
   }
+
+  const corsHeaders = getCorsHeaders(["POST", "OPTIONS"]);
 
   if (request.method !== "POST") {
     return new Response("Method not allowed", {
       status: 405,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
+      headers: corsHeaders,
     });
   }
 
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-  };
   const formData = await request.formData();
   const grantType = formData.get("grant_type");
   const code = formData.get("code");
@@ -1045,14 +1145,20 @@ async function handleToken(
   if (grantType !== "authorization_code") {
     return new Response(JSON.stringify({ error: "unsupported_grant_type" }), {
       status: 400,
-      headers,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
     });
   }
 
   if (!code || !clientId) {
     return new Response(JSON.stringify({ error: "invalid_request" }), {
       status: 400,
-      headers,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
     });
   }
 
@@ -1064,7 +1170,10 @@ async function handleToken(
     console.log(clientId.toString(), "invalid_client");
     return new Response(JSON.stringify({ error: "invalid_client" }), {
       status: 400,
-      headers,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
     });
   }
 
@@ -1081,7 +1190,10 @@ async function handleToken(
       }),
       {
         status: 400,
-        headers,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
       }
     );
   }
@@ -1098,7 +1210,10 @@ async function handleToken(
       }),
       {
         status: 400,
-        headers,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
       }
     );
   }
@@ -1111,7 +1226,13 @@ async function handleToken(
         error: "invalid_grant",
         message: `Invalid resource`,
       }),
-      { status: 400, headers }
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 
@@ -1138,7 +1259,12 @@ async function handleToken(
       token_type: "bearer",
       scope,
     }),
-    { headers }
+    {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    }
   );
 }
 
@@ -1148,12 +1274,20 @@ async function handleCallback(
   ctx: ExecutionContext,
   sameSite: string
 ): Promise<Response> {
+  // Handle OPTIONS request
+  if (request.method === "OPTIONS") {
+    return handleOptionsRequest();
+  }
+
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state");
 
   if (!code || !stateParam) {
-    return new Response("Missing code or state parameter", { status: 400 });
+    return new Response("Missing code or state parameter", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   // Get state from cookie
@@ -1162,7 +1296,10 @@ async function handleCallback(
   const providerStateCookie = cookies.provider_state;
 
   if (!stateCookie || stateCookie !== stateParam) {
-    return new Response("Invalid state parameter", { status: 400 });
+    return new Response("Invalid state parameter", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   // Parse state
@@ -1170,7 +1307,10 @@ async function handleCallback(
   try {
     state = JSON.parse(atob(stateParam));
   } catch {
-    return new Response("Invalid state format", { status: 400 });
+    return new Response("Invalid state format", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   console.log("callbackstate", { state });
@@ -1196,14 +1336,20 @@ async function handleCallback(
       `X API responded with ${
         tokenResponse.status
       } - ${await tokenResponse.text()}`,
-      { status: 400 }
+      {
+        status: 400,
+        headers: getCorsHeaders(),
+      }
     );
   }
 
   const tokenData = (await tokenResponse.json()) as any;
 
   if (!tokenData.access_token) {
-    return new Response("Failed to get access token", { status: 400 });
+    return new Response("Failed to get access token", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   // Get user info from X API
@@ -1213,7 +1359,10 @@ async function handleCallback(
   );
 
   if (!userResponse.ok) {
-    return new Response("Failed to get user info", { status: 400 });
+    return new Response("Failed to get user info", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   const userData = (await userResponse.json()) as any;
@@ -1285,7 +1434,10 @@ async function handleCallback(
     `https://${env.SELF_CLIENT_ID}`
   );
 
-  const headers = new Headers({ Location: state.redirectTo || "/" });
+  const headers = new Headers({
+    ...getCorsHeaders(),
+    Location: state.redirectTo || "/",
+  });
   headers.append(
     "Set-Cookie",
     `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
@@ -1568,6 +1720,7 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
         {
           status: isBrowser ? 302 : 401,
           headers: {
+            ...getCorsHeaders(),
             Location: loginUrl,
             "X-Login-URL": loginUrl,
             // MCP Required: WWW-Authenticate header with resource metadata URL (RFC9728)
@@ -1597,6 +1750,12 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
 
     // Merge any headers from middleware (like Set-Cookie) with the response
     const newHeaders = new Headers(response.headers);
+
+    // Add CORS headers to the response
+    const corsHeaders = getCorsHeaders();
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      newHeaders.set(key, value);
+    });
 
     return new Response(response.body, {
       status: response.status,
