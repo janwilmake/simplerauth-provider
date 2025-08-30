@@ -18,9 +18,11 @@
 
 One of the design goals of Simpler Auth is to be fully compliant with [the MCP Authorization spec](https://modelcontextprotocol.io/specification/draft/basic/authorization) and to follow their [security best practices](https://modelcontextprotocol.io/specification/draft/basic/security_best_practices).
 
-You can prompt the source code on security, and see it's rated quite well by Claude:
+I know this isn't proof, but you can prompt the source code on security, and see it's rated quite well by Claude:
 
 [![](https://b.lmpify.com)](https://letmeprompt.com/rules-httpsuithu-ynxf1f0)
+
+I'll work on a more formal way to ensure it works. Let me know if you have experience, would love contributions here.
 
 # Usage
 
