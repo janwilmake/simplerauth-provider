@@ -8,7 +8,7 @@ import {
   studioMiddleware,
 } from "queryable-object";
 
-const USER_DO_PREFIX = "user-v4:";
+const USER_DO_PREFIX = "user-v5:";
 
 export interface Env {
   SELF_CLIENT_ID: string;
@@ -174,6 +174,40 @@ export class UserDO extends DurableObject {
     }>("data");
   }
 
+  // Add this new function to the UserDO class
+  async getUserWithAccessToken(userId: string): Promise<{
+    user: XUser;
+    xAccessToken: string;
+  } | null> {
+    const result = this.sql
+      .exec(`SELECT * FROM users WHERE user_id = ?`, userId)
+      .toArray()[0];
+
+    if (!result) {
+      return null;
+    }
+
+    // Reconstruct user object
+    const additionalData = JSON.parse(
+      (result.additional_data as string) || "{}"
+    );
+    const user: XUser = {
+      id: result.user_id as string,
+      name: result.name as string,
+      username: result.username as string,
+      ...(result.profile_image_url && {
+        profile_image_url: result.profile_image_url as string,
+      }),
+      ...(result.verified && { verified: result.verified as boolean }),
+      ...additionalData,
+    };
+
+    return {
+      user,
+      xAccessToken: result.x_access_token as string,
+    };
+  }
+
   async setUser(user: XUser, xAccessToken: string) {
     const now = Math.floor(Date.now() / 1000);
 
@@ -205,49 +239,30 @@ export class UserDO extends DurableObject {
     );
   }
 
+  // Alter the createLogin function to take the encrypted access token
   async createLogin(
     userId: string,
     clientId: string,
-    resource: string
-  ): Promise<string> {
+    accessToken: string // Now takes the pre-encrypted access token
+  ): Promise<void> {
     // Validate that clientId matches resource hostname
     //const resourceUrl = new URL(resource);
     // if (resourceUrl.hostname !== clientId) {
     //   throw new Error("Client ID must match resource hostname");
     // }
 
-    // Get the user's X access token
-    const user = this.sql
-      .exec(`SELECT x_access_token FROM users WHERE user_id = ?`, userId)
-      .toArray()[0];
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    const xAccessToken = user.x_access_token as string;
-
-    const tokenData = `${userId};${resource};${xAccessToken}`;
-    //////
-    const encryptedData = await encrypt(tokenData, this.env.ENCRYPTION_SECRET);
-
-    // Create access token in format user_id:client_id:x_access_token
-    const accessToken = `simple_${encryptedData}`;
-
     const now = Math.floor(Date.now() / 1000);
 
-    // Store login with last_active_at set to now
+    // Store login with the provided access token
     this.sql.exec(
       `INSERT OR REPLACE INTO logins (access_token, user_id, client_id, last_active_at, session_count)
-       VALUES (?, ?, ?, ?, COALESCE((SELECT session_count FROM logins WHERE access_token = ?), 1))`,
+     VALUES (?, ?, ?, ?, COALESCE((SELECT session_count FROM logins WHERE access_token = ?), 1))`,
       accessToken,
       userId,
       clientId,
       now,
       accessToken // for COALESCE subquery
     );
-
-    return accessToken;
   }
 
   async updateActivity(accessToken: string): Promise<void> {
@@ -1070,7 +1085,6 @@ async function handleAuthorize(
 
   return new Response(null, { status: 302, headers });
 }
-
 async function createAuthCodeAndRedirect(
   env: Env,
   clientId: string,
@@ -1082,11 +1096,11 @@ async function createAuthCodeAndRedirect(
   // Generate auth code
   const authCode = generateCodeVerifier(); // Reuse the same random generation
 
-  // Get user's X access token from user DO
+  // Get user's X access token from user DO (single DO call)
   const userDO = env.UserDO.get(
     env.UserDO.idFromName(`${USER_DO_PREFIX}${userId}`)
   );
-  const userData = await userDO.getUser();
+  const userData = await userDO.getUserWithAccessToken(userId);
 
   if (!userData) {
     throw new Error("User not found");
@@ -1241,7 +1255,35 @@ async function handleToken(
     );
   }
 
-  const userDO = getMultiStub(
+  // Get user data from single DO
+  const userDO = env.UserDO.get(
+    env.UserDO.idFromName(`${USER_DO_PREFIX}${authData.userId}`)
+  );
+  const userData = await userDO.getUserWithAccessToken(authData.userId);
+
+  if (!userData) {
+    return new Response(
+      JSON.stringify({
+        error: "invalid_grant",
+        message: "User not found",
+      }),
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
+
+  // Create encrypted access token in worker (deterministic)
+  const tokenData = `${authData.userId};${authData.resource};${userData.xAccessToken}`;
+  const encryptedData = await encrypt(tokenData, env.ENCRYPTION_SECRET);
+  const accessToken = `simple_${encryptedData}`;
+
+  // Store login in aggregate DO
+  const multistub = getMultiStub(
     env.UserDO,
     [
       { name: `${USER_DO_PREFIX}${authData.userId}` },
@@ -1250,11 +1292,10 @@ async function handleToken(
     ctx
   );
 
-  // Create new access token for this client
-  const accessToken = await userDO.createLogin(
+  await multistub.createLogin(
     authData.userId,
     clientId.toString(),
-    authData.resource
+    accessToken
   );
 
   // Return the new access token
@@ -1377,7 +1418,6 @@ async function handleCallback(
     "_400x400"
   );
 
-  // Store user in their DO - this will set last_active_at to now
   const userDO = getMultiStub(
     env.UserDO,
     [
@@ -1386,6 +1426,7 @@ async function handleCallback(
     ],
     ctx
   );
+
   await userDO.setUser(user, tokenData.access_token);
 
   // Check if this was part of an OAuth provider flow
@@ -1403,12 +1444,13 @@ async function handleCallback(
         providerState.resource
       );
 
-      // Create access token for this client for cookie-based access
-      const accessToken = await userDO.createLogin(
-        user.id,
-        providerState.clientId,
-        providerState.resource
-      );
+      // Create access token for this client for cookie-based access (deterministic)
+      const newTokenData = `${user.id};${providerState.resource};${tokenData.access_token}`;
+      const encryptedData = await encrypt(newTokenData, env.ENCRYPTION_SECRET);
+      const accessToken = `simple_${encryptedData}`;
+
+      // Store login in aggregate DO
+      await userDO.createLogin(user.id, providerState.clientId, accessToken);
 
       // Set access token cookie and clear state cookies
       const headers = new Headers(response.headers);
@@ -1431,13 +1473,15 @@ async function handleCallback(
     }
   }
 
-  // Normal redirect (direct login) - create access token for browser client
-  const browserAccessToken = await userDO.createLogin(
-    user.id,
-    env.SELF_CLIENT_ID,
-    // resource is your own hostname
-    `https://${env.SELF_CLIENT_ID}`
+  // Normal redirect (direct login) - create access token for browser client (deterministic)
+  const browserTokenData = `${user.id};https://${env.SELF_CLIENT_ID};${tokenData.access_token}`;
+  const browserEncryptedData = await encrypt(
+    browserTokenData,
+    env.ENCRYPTION_SECRET
   );
+  const browserAccessToken = `simple_${browserEncryptedData}`;
+
+  await userDO.createLogin(user.id, env.SELF_CLIENT_ID, browserAccessToken);
 
   const headers = new Headers({
     ...getCorsHeaders(),
@@ -1517,20 +1561,13 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
 }
 
 // Encryption utilities
-
 async function encrypt(text: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(text);
 
-  // Use the text content itself to derive a deterministic salt
-  const saltSource = encoder.encode(text + secret);
-  const saltHash = await crypto.subtle.digest("SHA-256", saltSource);
-  const salt = new Uint8Array(saltHash.slice(0, 16));
-
-  // Use a deterministic IV based on content
-  const ivSource = encoder.encode(secret + text);
-  const ivHash = await crypto.subtle.digest("SHA-256", ivSource);
-  const iv = new Uint8Array(ivHash.slice(0, 12));
+  // Generate random salt and IV
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
 
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
@@ -1559,7 +1596,7 @@ async function encrypt(text: string, secret: string): Promise<string> {
     data
   );
 
-  // Combine salt + iv + encrypted data (same format as original)
+  // Combine salt + iv + encrypted data
   const combined = new Uint8Array(
     salt.length + iv.length + encrypted.byteLength
   );
