@@ -228,6 +228,7 @@ export class UserDO extends DurableObject {
     const xAccessToken = user.x_access_token as string;
 
     const tokenData = `${userId};${resource};${xAccessToken}`;
+    //////
     const encryptedData = await encrypt(tokenData, this.env.ENCRYPTION_SECRET);
 
     // Create access token in format user_id:client_id:x_access_token
@@ -1516,9 +1517,21 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
 }
 
 // Encryption utilities
+
 async function encrypt(text: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(text);
+
+  // Use the text content itself to derive a deterministic salt
+  const saltSource = encoder.encode(text + secret);
+  const saltHash = await crypto.subtle.digest("SHA-256", saltSource);
+  const salt = new Uint8Array(saltHash.slice(0, 16));
+
+  // Use a deterministic IV based on content
+  const ivSource = encoder.encode(secret + text);
+  const ivHash = await crypto.subtle.digest("SHA-256", ivSource);
+  const iv = new Uint8Array(ivHash.slice(0, 12));
+
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
@@ -1527,7 +1540,6 @@ async function encrypt(text: string, secret: string): Promise<string> {
     ["deriveKey"]
   );
 
-  const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
@@ -1541,14 +1553,13 @@ async function encrypt(text: string, secret: string): Promise<string> {
     ["encrypt"]
   );
 
-  const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv },
     key,
     data
   );
 
-  // Combine salt + iv + encrypted data
+  // Combine salt + iv + encrypted data (same format as original)
   const combined = new Uint8Array(
     salt.length + iv.length + encrypted.byteLength
   );
