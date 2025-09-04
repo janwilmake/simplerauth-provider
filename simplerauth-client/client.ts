@@ -341,7 +341,7 @@ async function handleAuthorize(
   providerUrl.searchParams.set("redirect_uri", redirectUri);
   providerUrl.searchParams.set("response_type", "code");
   providerUrl.searchParams.set("scope", scope);
-  providerUrl.searchParams.set("resource", originUrl); // MCP Required: resource parameter
+  providerUrl.searchParams.set("resource", originUrl);
   providerUrl.searchParams.set("code_challenge", codeChallenge);
   providerUrl.searchParams.set("code_challenge_method", "S256");
 
@@ -428,9 +428,7 @@ async function handleCallback(
     // Exchange code for token with the provider
     const tokenResponse = await fetch(`https://${providerHostname}/token`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(params),
     });
 
