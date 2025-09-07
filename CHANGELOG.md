@@ -59,3 +59,31 @@ AMBITION - SOLVE OAUTH ONCE AND FOR ALL! Use this by default unless specificaly 
   - ✅ Fix resource audience validation in provider: https://letmeprompt.com/rules-httpsuithu-nwbujx0
   - ✅ Also hold my implementation against https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices
   - ✅ Put a LMPIFY prompt in readme that shows it's all good.
+
+# 2025-08-31
+
+_Hostname-as-Client-ID Principle Discussion_
+
+https://tailscale.com/blog/dynamic-client-registration-dcr-for-mcp-ai
+
+Proposal to have separate domain-hosted document with client information - https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991
+
+✅ Submitted discussion about DCR security: https://github.com/modelcontextprotocol/modelcontextprotocol/discussions/1405
+
+_Create MCP-compatible OAuth Flow Test_
+
+✅ It'd be great to have a UI myself too for this as part of `universal-mcp-oauth`. Similarly, can be all purely front-end. Let's host it at https://mcp.agent-friendly.com.
+
+If I'm not logged in at https://login.wilmake.com, the flow at https://login.wilmake.com works fine, https://markdownfeed.com works fine as well, but from any MCP client using `universal-mcp-oauth`, it will show `You weren’t able to give access to the App. Go back and try logging in again.`. What is the difference here? The login flow from a client in `simplerauth-client` doesn't work it seems.
+
+FINE https://x.com/i/oauth2/authorize?response_type=code&client_id=MWlyVUFQWm5fN01qWTlnaVlBbmY6MTpjaQ&redirect_uri=https%3A%2F%2Flogin.wilmake.com%2Fcallback&scope=users.read+tweet.read+offline.access&state=eyJyZWRpcmVjdFRvIjoiL2F1dGhvcml6ZT9jbGllbnRfaWQ9bWFya2Rvd25mZWVkLmNvbSZyZWRpcmVjdF91cmk9aHR0cHMlM0ElMkYlMkZtYXJrZG93bmZlZWQuY29tJTJGY2FsbGJhY2smcmVzcG9uc2VfdHlwZT1jb2RlJnNjb3BlPXByb2ZpbGUmcmVzb3VyY2U9aHR0cHMlM0ElMkYlMkZtYXJrZG93bmZlZWQuY29tJmNvZGVfY2hhbGxlbmdlPWsyUFJ6Vi1BR2NIRVBmYWQ2MmwyRWZmM3phUVZPdkswQmZIN1cyMWppQlUmY29kZV9jaGFsbGVuZ2VfbWV0aG9kPVMyNTYiLCJjb2RlVmVyaWZpZXIiOiI4RWhFNE90YXpWeTJlQW9PTHp1OUg3a1JkWlRqWllBNUI3YUNIREQ1YXdZIiwicmVzb3VyY2UiOiJodHRwczovL21hcmtkb3duZmVlZC5jb20ifQ%3D%3D&code_challenge=wAdD9_ORfPEtsjYc0q3vDEc3O1XC6xnGs8SI7ZCT2so&code_challenge_method=S256
+
+(<500)
+
+NOT FINE https://x.com/i/oauth2/authorize?response_type=code&client_id=MWlyVUFQWm5fN01qWTlnaVlBbmY6MTpjaQ&redirect_uri=https%3A%2F%2Flogin.wilmake.com%2Fcallback&scope=users.read+tweet.read+offline.access&state=eyJyZWRpcmVjdFRvIjoiL2F1dGhvcml6ZT9yZXNwb25zZV90eXBlPWNvZGUmY2xpZW50X2lkPW1jcC5wMHdlYi5jb20mcmVkaXJlY3RfdXJpPWh0dHBzJTNBJTJGJTJGbWNwLnAwd2ViLmNvbSUyRm1jcCUyRmNhbGxiYWNrJTJGbWFya2Rvd25mZWVkLmNvbSZyZXNvdXJjZT1odHRwcyUzQSUyRiUyRm1hcmtkb3duZmVlZC5jb20lMkZtY3AmY29kZV9jaGFsbGVuZ2U9d1VSeTVIQ0tHSUVrUDN4dDdxZzBJNlZrVHVDa0xBcDI2VGRsaFQyRk9fOCZjb2RlX2NoYWxsZW5nZV9tZXRob2Q9UzI1NiZzdGF0ZT16Y2dpUFVocVVBUVhocFBVc05Oc0dBIiwiY29kZVZlcmlmaWVyIjoieWdULWtmM0xXNmRXalZTLWRqYk5EcWxlT2VZUWVXc09fR1hCcEM4VGpBVSIsInJlc291cmNlIjoiaHR0cHM6Ly9tYXJrZG93bmZlZWQuY29tL21jcCJ9&code_challenge=8cYhMFdEomiziZFriv_ib7Ugi5smJYs9sSrGeCQRMv8&code_challenge_method=S256
+
+(>500 characters)
+
+The problem seems to be that there's a max length of 500 characters to the state param.
+
+✅ Solved by removing redirect_to from encoded state and putting that in a cookie instead

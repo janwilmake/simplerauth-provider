@@ -919,8 +919,8 @@ async function handleAuthorize(
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-    // Create state with redirect info, code verifier, and resource
-    const state: OAuthState = { redirectTo, codeVerifier, resource };
+    // Create state with code verifier and resource (no redirectTo)
+    const state: OAuthState = { codeVerifier, resource };
     const stateString = btoa(JSON.stringify(state));
 
     // Build X OAuth URL
@@ -933,16 +933,26 @@ async function handleAuthorize(
     xUrl.searchParams.set("code_challenge", codeChallenge);
     xUrl.searchParams.set("code_challenge_method", "S256");
 
-    return new Response(null, {
-      status: 302,
-      headers: {
-        ...getCorsHeaders(),
-        Location: xUrl.toString(),
-        "Set-Cookie": `oauth_state=${encodeURIComponent(
-          stateString
-        )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`,
-      },
+    const headers = new Headers({
+      ...getCorsHeaders(),
+      Location: xUrl.toString(),
     });
+
+    // Set both oauth_state and redirect_to cookies
+    headers.append(
+      "Set-Cookie",
+      `oauth_state=${encodeURIComponent(
+        stateString
+      )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    );
+    headers.append(
+      "Set-Cookie",
+      `redirect_to=${encodeURIComponent(
+        redirectTo
+      )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    );
+
+    return new Response(null, { status: 302, headers });
   }
 
   // Validate that client_id looks like a domain
@@ -1048,13 +1058,23 @@ async function handleAuthorize(
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
+  // Create X state with only essential data (no redirectTo)
   const xState: OAuthState = {
-    redirectTo: url.pathname + url.search, // Return to this authorize request after X auth
     codeVerifier,
     resource,
   };
 
   const xStateString = btoa(JSON.stringify(xState));
+
+  if (xStateString.length > 500) {
+    return new Response(
+      "State string too long. \n\n" + JSON.stringify(xState, undefined, 2),
+      {
+        status: 400,
+        headers: getCorsHeaders(),
+      }
+    );
+  }
 
   // Build X OAuth URL
   const xUrl = new URL("https://x.com/i/oauth2/authorize");
@@ -1066,10 +1086,14 @@ async function handleAuthorize(
   xUrl.searchParams.set("code_challenge", codeChallenge);
   xUrl.searchParams.set("code_challenge_method", "S256");
 
+  console.log("Authorization URL", xUrl.toString(), "xState", xState);
+
   const headers = new Headers({
     ...getCorsHeaders(),
     Location: xUrl.toString(),
   });
+
+  // Set oauth_state and provider_state cookies
   headers.append(
     "Set-Cookie",
     `oauth_state=${encodeURIComponent(
@@ -1083,8 +1107,18 @@ async function handleAuthorize(
     )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
   );
 
+  // Store redirectTo in a separate cookie for OAuth provider flows
+  const redirectTo = url.pathname + url.search;
+  headers.append(
+    "Set-Cookie",
+    `redirect_to=${encodeURIComponent(
+      redirectTo
+    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+  );
+
   return new Response(null, { status: 302, headers });
 }
+
 async function createAuthCodeAndRedirect(
   env: Env,
   clientId: string,
@@ -1340,18 +1374,18 @@ async function handleCallback(
   const cookies = parseCookies(request.headers.get("Cookie") || "");
   const stateCookie = cookies.oauth_state;
   const providerStateCookie = cookies.provider_state;
+  const redirectToCookie = cookies.redirect_to; // Get redirectTo from cookie
 
-  if (!stateCookie || stateCookie !== stateParam) {
-    return new Response("Invalid state parameter", {
+  if (!stateCookie) {
+    return new Response("Missing state cookie", {
       status: 400,
       headers: getCorsHeaders(),
     });
   }
 
-  // Parse state
   let state: OAuthState;
   try {
-    state = JSON.parse(atob(stateParam));
+    state = JSON.parse(atob(stateCookie));
   } catch {
     return new Response("Invalid state format", {
       status: 400,
@@ -1359,7 +1393,15 @@ async function handleCallback(
     });
   }
 
+  if (stateCookie !== stateParam) {
+    return new Response("Invalid state format", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
+  }
+
   console.log("callbackstate", { state });
+
   // Exchange code for token with X
   const tokenResponse = await fetch("https://api.x.com/2/oauth2/token", {
     method: "POST",
@@ -1464,6 +1506,10 @@ async function handleCallback(
       );
       headers.append(
         "Set-Cookie",
+        `redirect_to=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+      );
+      headers.append(
+        "Set-Cookie",
         `access_token=${accessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
       );
 
@@ -1483,13 +1529,24 @@ async function handleCallback(
 
   await userDO.createLogin(user.id, env.SELF_CLIENT_ID, browserAccessToken);
 
+  // Use redirectTo from cookie, fallback to root
+  const redirectTo = redirectToCookie
+    ? decodeURIComponent(redirectToCookie)
+    : "/";
+
   const headers = new Headers({
     ...getCorsHeaders(),
-    Location: state.redirectTo || "/",
+    Location: redirectTo,
   });
+
+  // Clear all state cookies
   headers.append(
     "Set-Cookie",
     `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+  );
+  headers.append(
+    "Set-Cookie",
+    `redirect_to=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
   );
   headers.append(
     "Set-Cookie",
