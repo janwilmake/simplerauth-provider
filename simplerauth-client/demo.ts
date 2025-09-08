@@ -11,7 +11,7 @@ export default {
     },
     {
       isLoginRequired: true, // Force login
-      providerHostname: "login.wilmake.com", // Your OAuth provider
+      providerHostname: "localhost:8787", // Your OAuth provider
       scope: "profile",
       sameSite: "Lax",
     }

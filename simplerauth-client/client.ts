@@ -46,6 +46,11 @@ export function withSimplerAuth<TEnv = {}>(
     providerHostname = "login.wilmake.com",
   } = config;
 
+  const providerProtocol = providerHostname.startsWith("localhost:")
+    ? "http"
+    : "https";
+  const providerOrigin = `${providerProtocol}://${providerHostname}`;
+
   return async (
     request: Request,
     env: TEnv,
@@ -59,36 +64,36 @@ export function withSimplerAuth<TEnv = {}>(
       path === "/.well-known/oauth-authorization-server" ||
       path.startsWith("/.well-known/oauth-authorization-server/")
     ) {
-      return handleAuthorizationServerMetadata(request, providerHostname);
+      return handleAuthorizationServerMetadata(request, providerOrigin);
     }
 
     if (
       path === "/.well-known/oauth-protected-resource" ||
       path.startsWith("/.well-known/oauth-protected-resource/")
     ) {
-      return handleProtectedResourceMetadata(request, env, providerHostname);
+      return handleProtectedResourceMetadata(request, env, providerOrigin);
     }
 
     if (path === "/authorize") {
       return await handleAuthorize(
         request,
         env,
-        providerHostname,
+        providerOrigin,
         scope,
         sameSite
       );
     }
 
     if (path === "/callback") {
-      return await handleCallback(request, env, providerHostname, sameSite);
+      return await handleCallback(request, env, providerOrigin, sameSite);
     }
 
     if (path === "/token") {
-      return await handleToken(request, providerHostname);
+      return await handleToken(request, providerOrigin);
     }
 
     if (path === "/me") {
-      return await handleMe(request, providerHostname);
+      return await handleMe(request, providerOrigin);
     }
 
     if (path === "/logout") {
@@ -103,7 +108,7 @@ export function withSimplerAuth<TEnv = {}>(
     if (accessToken) {
       try {
         // Verify token with provider and get user info
-        const userResponse = await fetch(`https://${providerHostname}/me`, {
+        const userResponse = await fetch(`${providerOrigin}/me`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
 
@@ -156,7 +161,7 @@ export function withSimplerAuth<TEnv = {}>(
 
 function handleAuthorizationServerMetadata(
   request: Request,
-  providerHostname: string
+  providerOrigin: string
 ): Response {
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -170,11 +175,11 @@ function handleAuthorizationServerMetadata(
     });
   }
   const metadata = {
-    issuer: `https://${providerHostname}`,
-    authorization_endpoint: `https://${providerHostname}/authorize`,
-    token_endpoint: `https://${providerHostname}/token`,
+    issuer: providerOrigin,
+    authorization_endpoint: `${providerOrigin}/authorize`,
+    token_endpoint: `${providerOrigin}/token`,
     token_endpoint_auth_methods_supported: ["none"],
-    registration_endpoint: `https://${providerHostname}/register`,
+    registration_endpoint: `${providerOrigin}/register`,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
@@ -193,7 +198,7 @@ function handleAuthorizationServerMetadata(
 function handleProtectedResourceMetadata(
   request: Request,
   env: any,
-  providerHostname: string
+  providerOrigin: string
 ): Response {
   const url = new URL(request.url);
   const port = env.PORT || 8787;
@@ -214,7 +219,7 @@ function handleProtectedResourceMetadata(
 
   const metadata = {
     resource,
-    authorization_servers: [`https://${providerHostname}`],
+    authorization_servers: [providerOrigin],
     scopes_supported: ["profile"],
     bearer_methods_supported: ["header", "body"],
     resource_documentation: url.origin,
@@ -286,16 +291,14 @@ function validateRedirectUri(redirectUri: string, clientId: string): boolean {
 async function handleAuthorize(
   request: Request,
   env: any,
-  providerHostname: string,
+  providerOrigin: string,
   scope: string,
   sameSite: string
 ): Promise<Response> {
   const url = new URL(request.url);
 
-  const clientId =
-    url.searchParams.get("client_id") || isLocalhost(request)
-      ? "localhost"
-      : url.hostname;
+  const thisClientId = isLocalhost(request) ? "localhost" : url.hostname;
+  const clientId = url.searchParams.get("client_id") || thisClientId;
 
   // 8787 is wrangler default
   const port = env.PORT || 8787;
@@ -336,7 +339,7 @@ async function handleAuthorize(
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
   // Build provider authorization URL
-  const providerUrl = new URL(`https://${providerHostname}/authorize`);
+  const providerUrl = new URL(`${providerOrigin}/authorize`);
   providerUrl.searchParams.set("client_id", clientId);
   providerUrl.searchParams.set("redirect_uri", redirectUri);
   providerUrl.searchParams.set("response_type", "code");
@@ -384,7 +387,7 @@ async function handleAuthorize(
 async function handleCallback(
   request: Request,
   env: any,
-  providerHostname: string,
+  providerOrigin: string,
   sameSite: string
 ): Promise<Response> {
   const url = new URL(request.url);
@@ -426,7 +429,7 @@ async function handleCallback(
     console.log({ params });
 
     // Exchange code for token with the provider
-    const tokenResponse = await fetch(`https://${providerHostname}/token`, {
+    const tokenResponse = await fetch(`${providerOrigin}/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(params),
@@ -480,7 +483,7 @@ async function handleCallback(
 
 async function handleToken(
   request: Request,
-  providerHostname: string
+  providerOrigin: string
 ): Promise<Response> {
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
@@ -528,7 +531,7 @@ async function handleToken(
     }
 
     // Proxy token request to the provider with all parameters
-    const providerUrl = `https://${providerHostname}/token`;
+    const providerUrl = `${providerOrigin}/token`;
     const response = await fetch(providerUrl, {
       method: "POST",
       headers: {
@@ -572,7 +575,7 @@ async function handleToken(
 
 async function handleMe(
   request: Request,
-  providerHostname: string
+  providerOrigin: string
 ): Promise<Response> {
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
@@ -611,7 +614,7 @@ async function handleMe(
   }
 
   // Proxy /me requests to the provider
-  const providerUrl = `https://${providerHostname}/me`;
+  const providerUrl = `${providerOrigin}/me`;
 
   console.log("Checking me at ", { providerUrl, accessToken });
   try {

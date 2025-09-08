@@ -3,6 +3,22 @@
   "name": "x-oauth-client-provider-test",
   "observability": { "logs": { "enabled": true } },
   "compatibility_date": "2025-01-27",
+
+  "env": {
+    "localhost": {
+      // must be put here such that we can still see url.origin on localhost. Must run localhost with --env localhost
+      "routes": [],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "UserDO",
+            "class_name": "UserDO"
+          }
+        ]
+      }
+    }
+  },
+
   "routes": [
     {
       "custom_domain": true,
@@ -13,6 +29,7 @@
       "pattern": "x.wilmake.com"
     }
   ],
+
   "main": "main.ts",
   "durable_objects": {
     "bindings": [

@@ -759,12 +759,14 @@ tag = "v1"
 
     const url = new URL(request.url);
     const redirectTo = url.searchParams.get("redirect_to") || "/";
+    const secureFlag = isLocalhost(request) ? "" : " Secure;";
+
     return new Response(null, {
       status: 302,
       headers: {
         ...getCorsHeaders(),
         Location: redirectTo,
-        "Set-Cookie": `access_token=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`,
+        "Set-Cookie": `access_token=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`,
       },
     });
   }
@@ -907,6 +909,7 @@ async function handleAuthorize(
   const responseType = url.searchParams.get("response_type") || "code";
   const state = url.searchParams.get("state");
   const resource = url.searchParams.get("resource");
+  const secureFlag = isLocalhost(request) ? "" : " Secure;";
 
   // If no client_id, this is a direct login request
   if (!clientId) {
@@ -943,13 +946,13 @@ async function handleAuthorize(
       "Set-Cookie",
       `oauth_state=${encodeURIComponent(
         stateString
-      )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+      )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
     );
     headers.append(
       "Set-Cookie",
       `redirect_to=${encodeURIComponent(
         redirectTo
-      )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+      )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
     );
 
     return new Response(null, { status: 302, headers });
@@ -1098,13 +1101,13 @@ async function handleAuthorize(
     "Set-Cookie",
     `oauth_state=${encodeURIComponent(
       xStateString
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
   );
   headers.append(
     "Set-Cookie",
     `provider_state=${encodeURIComponent(
       providerStateString
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
   );
 
   // Store redirectTo in a separate cookie for OAuth provider flows
@@ -1113,7 +1116,7 @@ async function handleAuthorize(
     "Set-Cookie",
     `redirect_to=${encodeURIComponent(
       redirectTo
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
@@ -1362,6 +1365,7 @@ async function handleCallback(
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state");
+  const secureFlag = isLocalhost(request) ? "" : " Secure;";
 
   if (!code || !stateParam) {
     return new Response("Missing code or state parameter", {
@@ -1498,19 +1502,19 @@ async function handleCallback(
       const headers = new Headers(response.headers);
       headers.append(
         "Set-Cookie",
-        `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+        `oauth_state=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `provider_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+        `provider_state=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `redirect_to=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+        `redirect_to=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `access_token=${accessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
+        `access_token=${accessToken}; HttpOnly;${secureFlag} Max-Age=34560000; SameSite=${sameSite}; Path=/`
       );
 
       return new Response(response.body, { status: response.status, headers });
@@ -1542,15 +1546,15 @@ async function handleCallback(
   // Clear all state cookies
   headers.append(
     "Set-Cookie",
-    `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+    `oauth_state=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
   );
   headers.append(
     "Set-Cookie",
-    `redirect_to=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+    `redirect_to=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
   );
   headers.append(
     "Set-Cookie",
-    `access_token=${browserAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
+    `access_token=${browserAccessToken}; HttpOnly;${secureFlag} Max-Age=34560000; SameSite=${sameSite}; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
@@ -1713,6 +1717,17 @@ async function decrypt(encrypted: string, secret: string): Promise<string> {
   return decoder.decode(decrypted);
 }
 
+function isLocalhost(request: Request) {
+  const url = new URL(request.url);
+  return (
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    // only at localhost!
+    request.headers.get("cf-connecting-ip") === "::1" ||
+    request.headers.get("cf-connecting-ip") === "127.0.0.1"
+  );
+}
+
 export interface UserContext<T = { [key: string]: any }>
   extends ExecutionContext {
   /** Should contain authenticated X User */
@@ -1753,6 +1768,7 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     env: TEnv & Env,
     ctx: ExecutionContext
   ): Promise<Response> => {
+    console.log("ORIGIN", new URL(request.url).origin);
     const oauth = await handleOAuth(
       request,
       env,
